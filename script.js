@@ -34,7 +34,8 @@ reviewBtn.addEventListener('click', () => handleCardAction(false));
 restartBtn.addEventListener('click', resetApp);
 
 // Mock Intelligent Generation Pipeline (Stands in for LLM processing)
-function generateDeck() {
+
+async function generateDeck() {
     const rawTopic = topicInput.value.trim();
     if (!rawTopic) {
         alert("Please enter a topic or paste lecture notes first!");
@@ -47,17 +48,43 @@ function generateDeck() {
     setupContainer.classList.add('hidden');
     loadingContainer.classList.remove('hidden');
 
-    // Simulate Network latency / LLM processing overhead
-    setTimeout(() => {
-        flashcardsDeck = buildMockCards(rawTopic, count);
-        currentCardIndex = 0;
-        masteredScore = 0;
+    try {
+        // Send payload data directly to our custom Express port
+        const response = await fetch('/api/generate-flashcards', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ topic: rawTopic, cardCount: count }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Network response returned an error status.');
+        }
+
+        const data = await response.json();
         
+        if (data.success && data.deck) {
+            flashcardsDeck = data.deck;
+            currentCardIndex = 0;
+            masteredScore = 0;
+            
+            loadingContainer.classList.add('hidden');
+            flashcardContainer.classList.remove('hidden');
+            
+            renderCurrentCard();
+        } else {
+            throw new Error('Malformed schema returned from backend.');
+        }
+
+    } catch (error) {
+        console.error("Pipeline breakdown:", error);
+        alert("Failed to connect to the AI agent backend. Make sure your server is running!");
+        
+        // Revert UI to setup state if failure happens
         loadingContainer.classList.add('hidden');
-        flashcardContainer.classList.remove('hidden');
-        
-        renderCurrentCard();
-    }, 1800);
+        setupContainer.classList.remove('hidden');
+    }
 }
 
 // Logic to render information on the active card element
