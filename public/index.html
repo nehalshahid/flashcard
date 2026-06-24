@@ -7,85 +7,214 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
 
-        <header>
-            <div class="header-eyebrow">AI Study Engine</div>
-            <h1>Learn anything.<br><span>Faster.</span></h1>
-            <p>Drop a topic or raw notes &mdash; get a sharp deck._</p>
-        </header>
+<canvas id="confetti-canvas"></canvas>
 
-        <section class="setup-card" id="setup-container">
-            <div class="input-group">
-                <label for="topic-input">Topic / Lecture Notes</label>
-                <textarea id="topic-input" placeholder="e.g. Binary search trees, OS scheduling algorithms, or paste lecture notes here..."></textarea>
+<div class="container">
+
+    <!-- HEADER -->
+    <header>
+        <div class="header-eyebrow">AI Study Engine</div>
+        <h1>Learn anything.<br><span>Faster.</span></h1>
+        <p>Drop a topic or paste notes &mdash; get a sharp deck in seconds._</p>
+    </header>
+
+    <!-- SETUP -->
+    <section class="setup-card" id="setup-container">
+        <div class="input-group">
+            <label for="topic-input">Topic / Lecture Notes</label>
+            <textarea id="topic-input" placeholder="e.g. Binary search trees, OS scheduling algorithms, or paste your lecture notes here..."></textarea>
+        </div>
+        <div class="control-row">
+            <div class="input-group density-select">
+                <label for="card-count">Cards</label>
+                <select id="card-count">
+                    <option value="5">05 cards</option>
+                    <option value="8" selected>08 cards</option>
+                    <option value="10">10 cards</option>
+                    <option value="12">12 cards</option>
+                    <option value="15">15 cards</option>
+                </select>
             </div>
-            <div class="control-row">
-                <div class="input-group density-select">
-                    <label for="card-count">Card Count</label>
-                    <select id="card-count">
-                        <option value="5">05 cards</option>
-                        <option value="8" selected>08 cards</option>
-                        <option value="10">10 cards</option>
-                        <option value="12">12 cards</option>
-                    </select>
-                </div>
-                <button id="generate-btn" class="btn primary-btn">
-                    &#9654; Generate Deck
-                </button>
+            <div class="input-group density-select">
+                <label for="difficulty-select">Difficulty</label>
+                <select id="difficulty-select">
+                    <option value="beginner">Beginner</option>
+                    <option value="intermediate" selected>Intermediate</option>
+                    <option value="advanced">Advanced</option>
+                </select>
             </div>
-        </section>
+            <button id="generate-btn" class="btn primary-btn">
+                <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><polygon points="3,1 11,6 3,11" fill="currentColor"/></svg>
+                Generate
+            </button>
+        </div>
+        <div class="setup-options">
+            <label class="toggle-label">
+                <input type="checkbox" id="shuffle-toggle">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                Shuffle cards
+            </label>
+            <label class="toggle-label">
+                <input type="checkbox" id="sound-toggle" checked>
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                Sound effects
+            </label>
+        </div>
+        <div class="kbd-hint">
+            <span><kbd>Space</kbd> flip</span>
+            <span><kbd>→</kbd> got it</span>
+            <span><kbd>←</kbd> review</span>
+            <span><kbd>1 2 3</kbd> confidence</span>
+        </div>
+    </section>
 
-        <div id="loading-container" class="loading-container hidden">
-            <div class="loading-inner">
-                <div class="loader-bar-wrap"><div class="loader-bar"></div></div>
-                <p>Analyzing &amp; extracting key concepts<span>_</span></p>
+    <!-- LOADING -->
+    <div id="loading-container" class="loading-container hidden">
+        <div class="loading-inner">
+            <div class="loader-ring">
+                <svg viewBox="0 0 60 60" fill="none">
+                    <circle cx="30" cy="30" r="26" stroke="var(--border-mid)" stroke-width="2"/>
+                    <circle cx="30" cy="30" r="26" stroke="var(--amber)" stroke-width="2"
+                        stroke-dasharray="163" stroke-dashoffset="163"
+                        class="ring-progress" stroke-linecap="round"/>
+                </svg>
+                <span class="loader-icon">⚡</span>
+            </div>
+            <p id="loading-msg">Analyzing key concepts<span class="blink-dot">_</span></p>
+            <p class="loading-sub" id="loading-sub">Scanning for core ideas...</p>
+        </div>
+    </div>
+
+    <!-- FLASHCARD AREA -->
+    <main id="flashcard-container" class="hidden">
+
+        <div class="deck-meta">
+            <span id="card-counter" class="card-counter-mono">01 / 08</span>
+            <div class="meta-right">
+                <span id="score-counter" class="score-pill">✓ 0 mastered</span>
             </div>
         </div>
 
-        <main id="flashcard-container" class="hidden">
-            <div class="deck-meta">
-                <span id="card-counter" class="card-counter-mono">01 / 08</span>
-                <span id="score-counter" class="score-pill">&#10003; 0 mastered</span>
-            </div>
+        <div class="progress-track">
+            <div id="progress-bar" class="progress-fill" style="width:0%"></div>
+        </div>
 
-            <div class="progress-track">
-                <div id="progress-bar" class="progress-fill" style="width:0%"></div>
-            </div>
-
-            <div class="flashcard" id="flashcard">
-                <div class="card-inner">
-                    <div class="card-front">
-                        <div class="card-ghost-num" id="ghost-num-front">1</div>
-                        <div class="card-type-label">Question</div>
-                        <p id="question-text">Loading question...</p>
-                        <span class="flip-hint">flip to reveal</span>
-                    </div>
-                    <div class="card-back">
-                        <div class="card-ghost-num" id="ghost-num-back">1</div>
-                        <div class="card-type-label">Answer</div>
-                        <p id="answer-text">Loading answer...</p>
-                        <span class="flip-hint">flip back</span>
-                    </div>
+        <!-- CARD -->
+        <div class="flashcard" id="flashcard" tabindex="0" role="button" aria-label="Flashcard — press Space to flip">
+            <div class="card-inner">
+                <div class="card-front">
+                    <div class="card-ghost-num" id="ghost-num-front">1</div>
+                    <div class="card-type-label">Question</div>
+                    <p id="question-text">Loading question...</p>
+                    <span class="flip-hint">↻ flip to reveal</span>
+                </div>
+                <div class="card-back">
+                    <div class="card-ghost-num" id="ghost-num-back">1</div>
+                    <div class="card-type-label">Answer</div>
+                    <p id="answer-text">Loading answer...</p>
+                    <span class="flip-hint">↺ flip back</span>
                 </div>
             </div>
+        </div>
 
-            <div class="action-buttons">
-                <button id="review-btn" class="btn danger-btn">&#10005; Review Again</button>
-                <button id="correct-btn" class="btn success-btn">&#10003; Got It</button>
+        <!-- CONFIDENCE PANEL (appears after flip) -->
+        <div id="confidence-panel" class="confidence-panel hidden">
+            <div class="confidence-label">How well did you know this?</div>
+            <div class="confidence-btns">
+                <button class="conf-btn conf-hard" data-val="hard">
+                    <span class="conf-icon">🔴</span>
+                    <span>Nope</span>
+                    <kbd>1</kbd>
+                </button>
+                <button class="conf-btn conf-ok" data-val="ok">
+                    <span class="conf-icon">🟡</span>
+                    <span>Roughly</span>
+                    <kbd>2</kbd>
+                </button>
+                <button class="conf-btn conf-easy" data-val="easy">
+                    <span class="conf-icon">🟢</span>
+                    <span>Nailed it</span>
+                    <kbd>3</kbd>
+                </button>
             </div>
-        </main>
+        </div>
 
-        <section id="results-container" class="results-card hidden">
-            <div class="results-eyebrow">Session Complete</div>
-            <div class="score-big" id="final-score">0/0</div>
-            <div class="score-label">Cards Mastered</div>
-            <div class="score-divider"></div>
-            <p class="feedback-msg" id="feedback-msg">Keep going.</p>
-            <button id="restart-btn" class="btn secondary-btn">&#8635; New Deck</button>
-        </section>
+        <!-- FALLBACK BINARY ACTIONS -->
+        <div class="action-buttons" id="action-buttons">
+            <button id="review-btn" class="btn danger-btn">✕ Review Again</button>
+            <button id="correct-btn" class="btn success-btn">✓ Got It</button>
+        </div>
 
-    </div>
-    <script src="script.js"></script>
+    </main>
+
+    <!-- RESULTS -->
+    <section id="results-container" class="results-card hidden">
+        <div class="results-eyebrow">Session Complete</div>
+
+        <div class="score-ring-wrap">
+            <svg class="score-ring" viewBox="0 0 120 120" fill="none">
+                <circle cx="60" cy="60" r="50" stroke="var(--border-mid)" stroke-width="4"/>
+                <circle cx="60" cy="60" r="50" stroke="var(--amber)" stroke-width="4"
+                    stroke-dasharray="314" stroke-dashoffset="314"
+                    id="score-ring-circle" stroke-linecap="round"
+                    transform="rotate(-90 60 60)"/>
+            </svg>
+            <div class="score-ring-inner">
+                <div class="score-big" id="final-score">0/0</div>
+                <div class="score-label">mastered</div>
+            </div>
+        </div>
+
+        <p class="feedback-msg" id="feedback-msg">Keep going.</p>
+
+        <div class="results-stats">
+            <div class="stat">
+                <div class="stat-num green" id="stat-correct">0</div>
+                <div class="stat-label">Correct</div>
+            </div>
+            <div class="stat">
+                <div class="stat-num red" id="stat-missed">0</div>
+                <div class="stat-label">Missed</div>
+            </div>
+            <div class="stat">
+                <div class="stat-num" id="stat-time">0s</div>
+                <div class="stat-label">Time</div>
+            </div>
+            <div class="stat">
+                <div class="stat-num" id="stat-accuracy">0%</div>
+                <div class="stat-label">Accuracy</div>
+            </div>
+        </div>
+
+        <div class="confidence-breakdown">
+            <div class="conf-bar-row">
+                <span class="conf-bar-label">Nailed it</span>
+                <div class="conf-bar-track"><div class="conf-bar-fill easy" id="cb-easy" style="width:0%"></div></div>
+                <span class="conf-bar-count" id="cb-easy-n">0</span>
+            </div>
+            <div class="conf-bar-row">
+                <span class="conf-bar-label">Roughly</span>
+                <div class="conf-bar-track"><div class="conf-bar-fill ok" id="cb-ok" style="width:0%"></div></div>
+                <span class="conf-bar-count" id="cb-ok-n">0</span>
+            </div>
+            <div class="conf-bar-row">
+                <span class="conf-bar-label">Nope</span>
+                <div class="conf-bar-track"><div class="conf-bar-fill hard" id="cb-hard" style="width:0%"></div></div>
+                <span class="conf-bar-count" id="cb-hard-n">0</span>
+            </div>
+        </div>
+
+        <div class="results-actions">
+            <button id="restart-btn" class="btn secondary-btn">↻ New Deck</button>
+            <button id="export-btn" class="btn outline-btn">↓ Export</button>
+        </div>
+    </section>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="script.js"></script>
 </body>
 </html>
