@@ -3,92 +3,89 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Flashcard Generator</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>Flashcard — AI Study Engine</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
+
         <header>
-            <h1><i class="fa-solid fa-brain"></i> AI Flashcard Generator</h1>
-            <p>Paste a topic or lecture notes, and let the AI build your study deck.</p>
+            <div class="header-eyebrow">AI Study Engine</div>
+            <h1>Learn anything.<br><span>Faster.</span></h1>
+            <p>Drop a topic or raw notes &mdash; get a sharp deck._</p>
         </header>
 
         <section class="setup-card" id="setup-container">
             <div class="input-group">
-                <label for="topic-input">Topic or Lecture Notes</label>
-                <textarea id="topic-input" placeholder="e.g., Binary search trees, OS scheduling algorithms, or paste text here..."></textarea>
+                <label for="topic-input">Topic / Lecture Notes</label>
+                <textarea id="topic-input" placeholder="e.g. Binary search trees, OS scheduling algorithms, or paste lecture notes here..."></textarea>
             </div>
-            
             <div class="control-row">
                 <div class="input-group density-select">
-                    <label for="card-count">Number of Cards</label>
+                    <label for="card-count">Card Count</label>
                     <select id="card-count">
-                        <option value="5">5 Cards</option>
-                        <option value="8" selected>8 Cards</option>
-                        <option value="10">10 Cards</option>
-                        <option value="12">12 Cards</option>
+                        <option value="5">05 cards</option>
+                        <option value="8" selected>08 cards</option>
+                        <option value="10">10 cards</option>
+                        <option value="12">12 cards</option>
                     </select>
                 </div>
                 <button id="generate-btn" class="btn primary-btn">
-                    <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Flashcards
+                    &#9654; Generate Deck
                 </button>
             </div>
         </section>
 
         <div id="loading-container" class="loading-container hidden">
-            <div class="spinner"></div>
-            <p>AI is analyzing your text and refining key insights...</p>
+            <div class="loading-inner">
+                <div class="loader-bar-wrap"><div class="loader-bar"></div></div>
+                <p>Analyzing &amp; extracting key concepts<span>_</span></p>
+            </div>
         </div>
 
         <main id="flashcard-container" class="hidden">
-            <div class="progress-bar-container">
-                <div id="progress-bar" class="progress-bar"></div>
+            <div class="deck-meta">
+                <span id="card-counter" class="card-counter-mono">01 / 08</span>
+                <span id="score-counter" class="score-pill">&#10003; 0 mastered</span>
             </div>
-            
-            <div class="deck-stats">
-                <span id="card-counter">Card 1 of 5</span>
-                <span id="score-counter"><i class="fa-solid fa-check-circle"></i> Mastered: 0</span>
+
+            <div class="progress-track">
+                <div id="progress-bar" class="progress-fill" style="width:0%"></div>
             </div>
 
             <div class="flashcard" id="flashcard">
                 <div class="card-inner">
                     <div class="card-front">
-                        <div class="card-label">Question</div>
+                        <div class="card-ghost-num" id="ghost-num-front">1</div>
+                        <div class="card-type-label">Question</div>
                         <p id="question-text">Loading question...</p>
-                        <span class="hint-text"><i class="fa-solid fa-rotate"></i> Click to flip</span>
+                        <span class="flip-hint">flip to reveal</span>
                     </div>
                     <div class="card-back">
-                        <div class="card-label">Answer</div>
+                        <div class="card-ghost-num" id="ghost-num-back">1</div>
+                        <div class="card-type-label">Answer</div>
                         <p id="answer-text">Loading answer...</p>
-                        <span class="hint-text"><i class="fa-solid fa-rotate"></i> Click to flip back</span>
+                        <span class="flip-hint">flip back</span>
                     </div>
                 </div>
             </div>
 
             <div class="action-buttons">
-                <button id="review-btn" class="btn danger-btn">
-                    <i class="fa-solid fa-xmark"></i> Review Again
-                </button>
-                <button id="correct-btn" class="btn success-btn">
-                    <i class="fa-solid fa-check"></i> Got It!
-                </button>
+                <button id="review-btn" class="btn danger-btn">&#10005; Review Again</button>
+                <button id="correct-btn" class="btn success-btn">&#10003; Got It</button>
             </div>
         </main>
 
         <section id="results-container" class="results-card hidden">
-            <h2><i class="fa-solid fa-trophy"></i> Session Completed!</h2>
-            <div class="score-display">
-                <span id="final-score">0/0</span>
-                <p>Cards Mastered</p>
-            </div>
-            <div class="feedback-msg" id="feedback-msg">Great job! Keep practicing.</div>
-            <button id="restart-btn" class="btn secondary-btn">
-                <i class="fa-solid fa-arrow-rotate-left"></i> Create New Deck
-            </button>
+            <div class="results-eyebrow">Session Complete</div>
+            <div class="score-big" id="final-score">0/0</div>
+            <div class="score-label">Cards Mastered</div>
+            <div class="score-divider"></div>
+            <p class="feedback-msg" id="feedback-msg">Keep going.</p>
+            <button id="restart-btn" class="btn secondary-btn">&#8635; New Deck</button>
         </section>
-    </div>
 
+    </div>
     <script src="script.js"></script>
 </body>
 </html>
