@@ -20,7 +20,7 @@ export default async function handler(req, res) {
 
     try {
         const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+        const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
         const response = await model.generateContent(prompt);
         const flashcards = JSON.parse(response.response.text().trim());
         res.json({ success: true, deck: flashcards });
