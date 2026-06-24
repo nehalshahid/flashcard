@@ -27,6 +27,15 @@ No markdown, no code blocks. Raw JSON only.`;
         );
 
         const data = await response.json();
+        
+        // Return full Gemini response so we can see what's happening
+        if (!response.ok || !data.candidates) {
+            return res.status(500).json({ 
+                error: 'Gemini API error', 
+                gemini_response: data 
+            });
+        }
+
         const text = data.candidates[0].content.parts[0].text.trim();
         const clean = text.replace(/```json|```/g, '').trim();
         const flashcards = JSON.parse(clean);
