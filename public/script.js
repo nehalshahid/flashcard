@@ -98,9 +98,11 @@ function handleCardAction(isMastered) {
         masteredScore++;
         currentCardIndex++;
     } else {
-        // Move current card to the end of the deck for review later
-        const card = flashcardsDeck.splice(currentCardIndex, 1)[0];
-        flashcardsDeck.push(card);
+        currentCardIndex = 0;
+        masteredScore = 0;
+        flashcard.classList.remove('flipped');
+        renderCurrentCard();
+        return;
     }
 
     if (currentCardIndex < flashcardsDeck.length) {
