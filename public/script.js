@@ -94,8 +94,15 @@ function renderCurrentCard() {
 }
 
 function handleCardAction(isMastered) {
-    if (isMastered) masteredScore++;
-    currentCardIndex++;
+    if (isMastered) {
+        masteredScore++;
+        currentCardIndex++;
+    } else {
+        // Move current card to the end of the deck for review later
+        const card = flashcardsDeck.splice(currentCardIndex, 1)[0];
+        flashcardsDeck.push(card);
+    }
+
     if (currentCardIndex < flashcardsDeck.length) {
         renderCurrentCard();
     } else {
