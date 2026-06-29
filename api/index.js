@@ -242,13 +242,28 @@ Format:
 
         const text = choice.message.content.trim();
         const stripped = text.replace(/```json/gi, '').replace(/```/g, '');
-        const match = stripped.match(/\[[\s\S]*\]/);
-
-        if (!match) {
-            return res.status(500).json({ error: 'AI returned unexpected format.', raw: text.slice(0, 300) });
+        
+        let flashcards = null;
+        try {
+            flashcards = JSON.parse(stripped);
+        } catch (e) {
+            const match = stripped.match(/\[[\s\S]*\]/);
+            if (match) {
+                try {
+                    flashcards = JSON.parse(match[0]);
+                } catch (innerE) {
+                    // Truncated or corrupt JSON
+                }
+            }
         }
 
-        const flashcards = JSON.parse(match[0]);
+        if (!flashcards) {
+            return res.status(500).json({ 
+                error: 'AI returned unexpected or truncated format.', 
+                raw: text 
+            });
+        }
+
         res.json({ success: true, deck: flashcards });
 
     } catch (error) {
