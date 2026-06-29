@@ -31,6 +31,42 @@ const feedbackMsg = document.getElementById('feedback-msg');
 const resultsBar = document.getElementById('results-bar');
 const toast = document.getElementById('toast');
 
+// File upload handling
+const uploadZone = document.getElementById('upload-zone');
+const fileInput = document.getElementById('file-input');
+const uploadLabel = document.getElementById('upload-label');
+let uploadedFile = null;
+
+uploadZone.addEventListener('click', () => fileInput.click());
+
+fileInput.addEventListener('change', () => {
+    const file = fileInput.files[0];
+    if (file) {
+        uploadedFile = file;
+        uploadLabel.textContent = `✓ ${file.name}`;
+        uploadZone.classList.add('has-file');
+    }
+});
+
+uploadZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadZone.classList.add('dragover');
+});
+
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+
+uploadZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) {
+        uploadedFile = file;
+        uploadLabel.textContent = `✓ ${file.name}`;
+        uploadZone.classList.add('has-file');
+        fileInput.files = e.dataTransfer.files;
+    }
+});
+
 // Events
 generateBtn.addEventListener('click', generateDeck);
 flashcard.addEventListener('click', flipCard);
@@ -58,7 +94,7 @@ function flipCard() {
 
 async function generateDeck() {
     const rawTopic = topicInput.value.trim();
-    if (!rawTopic) { showToast('Enter a topic first'); return; }
+    if (!rawTopic && !uploadedFile) { showToast('Enter a topic or upload a file'); return; }
 
     lastTopic = rawTopic;
     lastCount = parseInt(cardCountSelect.value);
@@ -67,11 +103,24 @@ async function generateDeck() {
     loadingContainer.classList.remove('hidden');
 
     try {
-        const response = await fetch('/api/generate-flashcards', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ topic: rawTopic, cardCount: lastCount }),
-        });
+        let response;
+
+        if (uploadedFile) {
+            const formData = new FormData();
+            formData.append('file', uploadedFile);
+            formData.append('cardCount', lastCount);
+
+            response = await fetch('/api/generate-flashcards', {
+                method: 'POST',
+                body: formData
+            });
+        } else {
+            response = await fetch('/api/generate-flashcards', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ topic: rawTopic, cardCount: lastCount }),
+            });
+        }
 
         if (!response.ok) throw new Error('Bad response');
         const data = await response.json();
@@ -89,7 +138,7 @@ async function generateDeck() {
         }
     } catch (error) {
         console.error(error);
-        showToast('Failed to connect — check your connection');
+        showToast('Failed to generate — try again');
         loadingContainer.classList.add('hidden');
         setupContainer.classList.remove('hidden');
     }

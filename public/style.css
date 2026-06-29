@@ -695,3 +695,59 @@ select:focus { outline: none; border-color: var(--amber-dim); }
     .flashcard { height: 260px; }
     .results-score { font-size: 4rem; }
 }
+
+/* ── UPLOAD ZONE ── */
+.upload-zone {
+    border: 1px dashed var(--border2);
+    border-radius: 4px;
+    background: var(--bg);
+    transition: all 0.2s;
+    cursor: pointer;
+    margin-bottom: 4px;
+}
+
+.upload-zone:hover, .upload-zone.dragover {
+    border-color: var(--amber-dim);
+    background: var(--amber-soft);
+}
+
+.upload-zone.has-file {
+    border-color: var(--teal);
+    background: var(--teal-soft);
+}
+
+.upload-inner {
+    padding: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+}
+
+.upload-zone.has-file .upload-inner { color: var(--teal); }
+
+.divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 12px 0;
+}
+
+.divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+
+.divider span {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--text-muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+}

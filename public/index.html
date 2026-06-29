@@ -50,6 +50,15 @@
                 <p class="panel-sub">Drop a topic or paste notes — get a sharp deck in seconds</p>
             </div>
             <div class="form-body">
+                <div class="upload-zone" id="upload-zone">
+                <input type="file" id="file-input" accept=".pdf,.docx,.txt" hidden>
+                <div class="upload-inner" id="upload-trigger">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 13V4M10 4L7 7M10 4L13 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 14V15.5C3 16.3 3.7 17 4.5 17H15.5C16.3 17 17 16.3 17 15.5V14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                    <span id="upload-label">Upload PDF, DOCX, or TXT</span>
+                </div>
+            </div>
+
+            <div class="divider"><span>or type below</span></div>
                 <div class="field">
                     <label for="topic-input">Topic or lecture notes</label>
                     <textarea id="topic-input" placeholder="e.g. Binary search trees, OS scheduling, photosynthesis — or paste full lecture notes..."></textarea>
