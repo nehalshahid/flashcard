@@ -201,11 +201,13 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Not enough text extracted.' });
     }
 
-    const trimmedTopic = topic.trim().slice(0, 6000);
+    // Keep input short so output tokens don't overflow the 8192 limit
+    const trimmedTopic = topic.trim().slice(0, 3000);
 
     const prompt = `Create exactly ${cardCount} flashcards about this topic: "${trimmedTopic}"
 
 Respond with ONLY a JSON array, nothing else. No explanation, no text before or after.
+Keep each answer concise — 1-2 sentences max.
 Format:
 [{"question":"...","answer":"..."},{"question":"...","answer":"..."}]`;
 
@@ -221,11 +223,11 @@ Format:
                 messages: [
                     {
                         role: 'system',
-                        content: 'You are a flashcard generator. You only respond with valid JSON arrays. Never add any text before or after the JSON.'
+                        content: 'You are a flashcard generator. You only respond with valid JSON arrays. Keep each answer to 1-2 sentences. Never add any text before or after the JSON.'
                     },
                     { role: 'user', content: prompt }
                 ],
-                max_tokens: 4096,
+                max_tokens: 8000,
                 temperature: 0.3
             })
         });
@@ -235,7 +237,16 @@ Format:
             return res.status(500).json({ error: 'Bad Groq response', raw: data });
         }
 
-        const text = data.choices[0].message.content.trim();
+        const choice = data.choices[0];
+
+        // Detect truncation before trying to parse
+        if (choice.finish_reason === 'length') {
+            return res.status(500).json({
+                error: 'Response was cut off. Try fewer cards or a shorter document.'
+            });
+        }
+
+        const text = choice.message.content.trim();
 
         // Strip markdown fences if present, then extract the JSON array
         // using a match instead of destructive regexes that can eat content
