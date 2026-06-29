@@ -1,4 +1,4 @@
-import mammoth from 'mammoth';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 export const config = {
     api: { bodyParser: false }
@@ -39,6 +39,18 @@ function parseMultipart(buffer, boundary) {
     return parts;
 }
 
+async function extractPdfText(buffer) {
+    const uint8Array = new Uint8Array(buffer);
+    const pdf = await pdfjsLib.getDocument({ data: uint8Array }).promise;
+    let text = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        text += content.items.map(item => item.str).join(' ') + '\n';
+    }
+    return text;
+}
+
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
@@ -63,15 +75,16 @@ export default async function handler(req, res) {
         const filename = filePart.filename.toLowerCase();
 
         try {
-            if (filename.endsWith('.docx')) {
-                const result = await mammoth.extractRawText({ buffer: filePart.data });
-                topic = result.value;
-            } else if (filename.endsWith('.txt')) {
+            if (filename.endsWith('.txt')) {
                 topic = filePart.data.toString('utf-8');
             } else if (filename.endsWith('.pdf')) {
-                return res.status(400).json({ error: 'PDF support coming soon. Please use DOCX or TXT for now.' });
+                topic = await extractPdfText(filePart.data);
+            } else if (filename.endsWith('.docx')) {
+                const mammoth = await import('mammoth');
+                const result = await mammoth.default.extractRawText({ buffer: filePart.data });
+                topic = result.value;
             } else {
-                return res.status(400).json({ error: 'Unsupported file. Use DOCX or TXT.' });
+                return res.status(400).json({ error: 'Unsupported file. Use PDF, DOCX, or TXT.' });
             }
         } catch (parseErr) {
             return res.status(500).json({ error: 'Failed to read file.', details: parseErr.message });
@@ -89,11 +102,11 @@ export default async function handler(req, res) {
 
     const trimmedTopic = topic.trim().slice(0, 6000);
 
-    const prompt = `You are an expert academic AI Flashcard Generator. 
-Analyze the following content and extract exactly ${cardCount} distinct, high-yield flashcards.
-Content: "${trimmedTopic}"
-Return ONLY a valid JSON array. Each object must have exactly: "question" and "answer".
-No markdown, no code blocks. Raw JSON only.`;
+    const prompt = `Create exactly ${cardCount} flashcards about this topic: "${trimmedTopic}"
+
+Respond with ONLY a JSON array, nothing else. No explanation, no text before or after.
+Format:
+[{"question":"...","answer":"..."},{"question":"...","answer":"..."}]`;
 
     try {
         const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -104,30 +117,33 @@ No markdown, no code blocks. Raw JSON only.`;
             },
             body: JSON.stringify({
                 model: 'llama-3.1-8b-instant',
-                messages: [{ role: 'user', content: prompt }],
-                temperature: 0.7
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'You are a flashcard generator. You only respond with valid JSON arrays. Never add any text before or after the JSON.'
+                    },
+                    { role: 'user', content: prompt }
+                ],
+                temperature: 0.3
             })
         });
 
         const data = await response.json();
 
-// Debug: return raw response so we can see what Groq is sending
-if (!data.choices || !data.choices[0]) {
-    return res.status(500).json({ error: 'Bad Groq response', raw: data });
-}
+        if (!data.choices || !data.choices[0]) {
+            return res.status(500).json({ error: 'Bad Groq response', raw: data });
+        }
 
-const text = data.choices[0].message.content.trim();
-const jsonMatch = text.match(/\[[\s\S]*\]/);
+        const text = data.choices[0].message.content.trim();
+        const cleaned = text
+            .replace(/```json/gi, '')
+            .replace(/```/g, '')
+            .replace(/^[^[]*/, '')
+            .replace(/[^\]]*$/, '')
+            .trim();
 
-if (!jsonMatch) {
-    return res.status(500).json({ 
-        error: 'No JSON found', 
-        raw_text: text.slice(0, 500) 
-    });
-}
-
-const flashcards = JSON.parse(jsonMatch[0]);
-res.json({ success: true, deck: flashcards });
+        const flashcards = JSON.parse(cleaned);
+        res.json({ success: true, deck: flashcards });
 
     } catch (error) {
         res.status(500).json({ error: 'AI generation failed.', details: error.message });
