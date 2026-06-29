@@ -195,7 +195,7 @@ export default async function handler(req, res) {
     }
 
     // Normalize all text to plain ASCII, then cap to 3000 chars
-    const cleanTopic = normalizeText(topic).slice(0, 1500); // ~1500 tokens budget for topic
+    const cleanTopic = normalizeText(topic).slice(0, 800); // keep well under 6000 TPM limit
 
     const prompt = `Create exactly ${cardCount} flashcards about this topic: ${JSON.stringify(cleanTopic)}
 
@@ -220,7 +220,7 @@ Format:
                     },
                     { role: 'user', content: prompt }
                 ],
-                max_tokens: 1500,
+                max_tokens: 1000,
                 temperature: 0.3
             })
         });
