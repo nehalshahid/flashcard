@@ -469,14 +469,14 @@ select:focus { outline: none; border-color: var(--amber-dim); }
     -webkit-backface-visibility: hidden; /* Fixes Mobile Safari / iOS Chrome bleed-through */
     backface-visibility: hidden;         /* Fixes Desktop Engines */
     border-radius: 6px;
-    padding: 28px 32px 32px;             /* Clean, balanced padding */
+    padding: 32px 24px;                  /* Comfortable padding for mobile viewports */
     display: flex;
     flex-direction: column;
-    justify-content: flex-start;         /* CRITICAL: Fixes the mobile top-clipping overflow bug */
-    overflow-y: auto;                    /* Allows longer answers to cleanly scroll */
+    justify-content: center;             /* Keeps the content centered natively */
+    align-items: center;                 /* Horizontal centering */
+    text-align: center;
+    overflow-y: auto;                    /* Allows content to scroll gracefully if needed */
     border: 1px solid var(--border);
-    
-    /* Smooth scrolling feel on iOS devices */
     -webkit-overflow-scrolling: touch; 
 }
 
@@ -717,7 +717,13 @@ select:focus { outline: none; border-color: var(--amber-dim); }
 @media (max-width: 768px) {
     .sidebar { display: none; }
     .main-col { margin-left: 0; padding: 32px 20px; justify-content: flex-start; padding-top: 48px; }
-    .flashcard { height: auto; min-height: 280px; } /* CRITICAL: Allows card container box to scale dynamically up instead of causing clipping overflows */
+    
+    /* FIX: Changed from rigid height to a fluid dynamic min-height */
+    .flashcard { 
+        height: auto; 
+        min-height: 320px; 
+    }
+    
     .results-score { font-size: 4rem; }
 }
 
