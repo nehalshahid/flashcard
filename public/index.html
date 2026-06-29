@@ -4,88 +4,145 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flashcard — AI Study Engine</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
+<canvas id="confetti-canvas"></canvas>
+<div class="page-wrap">
 
-        <header>
-            <div class="header-eyebrow">AI Study Engine</div>
-            <h1>Learn anything.<br><span>Faster.</span></h1>
-            <p>Drop a topic or raw notes &mdash; get a sharp deck._</p>
-        </header>
-
-        <section class="setup-card" id="setup-container">
-            <div class="input-group">
-                <label for="topic-input">Topic / Lecture Notes</label>
-                <textarea id="topic-input" placeholder="e.g. Binary search trees, OS scheduling algorithms, or paste lecture notes here..."></textarea>
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="brand-mark">FC</div>
+            <span class="brand-name">Flashcard</span>
+        </div>
+        <div class="sidebar-tagline">
+            <p>Turn any topic into a sharp study deck — instantly.</p>
+        </div>
+        <div class="sidebar-tips">
+            <div class="tip">
+                <span class="tip-icon">✦</span>
+                <p>Paste raw lecture notes for best results</p>
             </div>
-            <div class="control-row">
-                <div class="input-group density-select">
-                    <label for="card-count">Card Count</label>
-                    <select id="card-count">
-                        <option value="5">05 cards</option>
-                        <option value="8" selected>08 cards</option>
-                        <option value="10">10 cards</option>
-                        <option value="12">12 cards</option>
-                    </select>
-                </div>
-                <button id="generate-btn" class="btn primary-btn">
-                    &#9654; Generate Deck
-                </button>
+            <div class="tip">
+                <span class="tip-icon">✦</span>
+                <p>Press <kbd>Space</kbd> to flip a card</p>
             </div>
-        </section>
-
-        <div id="loading-container" class="loading-container hidden">
-            <div class="loading-inner">
-                <div class="loader-bar-wrap"><div class="loader-bar"></div></div>
-                <p>Analyzing &amp; extracting key concepts<span>_</span></p>
+            <div class="tip">
+                <span class="tip-icon">✦</span>
+                <p><kbd>→</kbd> Got it &nbsp;·&nbsp; <kbd>←</kbd> Review again</p>
+            </div>
+            <div class="tip">
+                <span class="tip-icon">✦</span>
+                <p>Cards you miss loop back automatically</p>
             </div>
         </div>
+        <div class="sidebar-footer">Powered by Groq · LLaMA 3.1</div>
+    </aside>
 
-        <main id="flashcard-container" class="hidden">
-            <div class="deck-meta">
-                <span id="card-counter" class="card-counter-mono">01 / 08</span>
-                <span id="score-counter" class="score-pill">&#10003; 0 mastered</span>
+    <main class="main-col">
+
+        <section id="setup-container" class="panel">
+            <div class="panel-header">
+                <div class="eyebrow">AI Study Engine</div>
+                <h1>What are you<br><em>studying today?</em></h1>
+                <p class="panel-sub">Drop a topic or paste notes — get a sharp deck in seconds</p>
             </div>
-
-            <div class="progress-track">
-                <div id="progress-bar" class="progress-fill" style="width:0%"></div>
-            </div>
-
-            <div class="flashcard" id="flashcard">
-                <div class="card-inner">
-                    <div class="card-front">
-                        <div class="card-ghost-num" id="ghost-num-front">1</div>
-                        <div class="card-type-label">Question</div>
-                        <p id="question-text">Loading question...</p>
-                        <span class="flip-hint">flip to reveal</span>
+            <div class="form-body">
+                <div class="field">
+                    <label for="topic-input">Topic or lecture notes</label>
+                    <textarea id="topic-input" placeholder="e.g. Binary search trees, OS scheduling, photosynthesis — or paste full lecture notes..."></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="field field-sm">
+                        <label for="card-count">Cards</label>
+                        <select id="card-count">
+                            <option value="5">5 cards</option>
+                            <option value="8" selected>8 cards</option>
+                            <option value="10">10 cards</option>
+                            <option value="12">12 cards</option>
+                            <option value="15">15 cards</option>
+                        </select>
                     </div>
-                    <div class="card-back">
-                        <div class="card-ghost-num" id="ghost-num-back">1</div>
-                        <div class="card-type-label">Answer</div>
-                        <p id="answer-text">Loading answer...</p>
-                        <span class="flip-hint">flip back</span>
+                    <button id="generate-btn" class="btn btn-primary">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1L8.5 5.5H13L9.5 8.5L11 13L7 10L3 13L4.5 8.5L1 5.5H5.5L7 1Z" fill="currentColor"/></svg>
+                        Generate Deck
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <section id="loading-container" class="panel loading-panel hidden">
+            <div class="loader-content">
+                <div class="loader-ring">
+                    <svg viewBox="0 0 50 50"><circle cx="25" cy="25" r="20" fill="none" stroke="var(--border)" stroke-width="2.5"/><circle cx="25" cy="25" r="20" fill="none" stroke="var(--amber)" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="30 96" class="loader-arc"/></svg>
+                </div>
+                <p class="loader-text">Building your deck<span class="blink">_</span></p>
+                <p class="loader-sub">Extracting high-yield concepts from your notes</p>
+            </div>
+        </section>
+
+        <section id="flashcard-container" class="hidden">
+            <div class="deck-header">
+                <span id="card-counter" class="deck-counter">1 / 8</span>
+                <div class="progress-track"><div id="progress-bar" class="progress-fill"></div></div>
+                <div id="score-counter" class="score-badge">0 mastered</div>
+            </div>
+
+            <div class="flashcard" id="flashcard" tabindex="0">
+                <div class="card-inner">
+                    <div class="card-face card-front">
+                        <div class="card-eyebrow">Question</div>
+                        <p id="question-text" class="card-text"></p>
+                        <span class="card-ghost" id="ghost-front">1</span>
+                        <div class="flip-cue">↻ flip to reveal</div>
+                    </div>
+                    <div class="card-face card-back">
+                        <div class="card-eyebrow card-eyebrow-answer">Answer</div>
+                        <p id="answer-text" class="card-text card-text-answer"></p>
+                        <span class="card-ghost card-ghost-back" id="ghost-back">1</span>
+                        <div class="flip-cue flip-cue-back">↻ flip back</div>
                     </div>
                 </div>
             </div>
 
-            <div class="action-buttons">
-                <button id="review-btn" class="btn danger-btn">&#10005; Review Again</button>
-                <button id="correct-btn" class="btn success-btn">&#10003; Got It</button>
+            <div class="card-actions">
+                <button id="review-btn" class="btn btn-review">
+                    ↺ &nbsp;Review Again
+                </button>
+                <button id="correct-btn" class="btn btn-got-it">
+                    ✓ &nbsp;Got It
+                </button>
             </div>
-        </main>
 
-        <section id="results-container" class="results-card hidden">
-            <div class="results-eyebrow">Session Complete</div>
-            <div class="score-big" id="final-score">0/0</div>
-            <div class="score-label">Cards Mastered</div>
-            <div class="score-divider"></div>
-            <p class="feedback-msg" id="feedback-msg">Keep going.</p>
-            <button id="restart-btn" class="btn secondary-btn">&#8635; New Deck</button>
+            <div class="kbd-row">
+                <span><kbd>Space</kbd> flip</span>
+                <span><kbd>→</kbd> got it</span>
+                <span><kbd>←</kbd> review</span>
+                <span><kbd>Esc</kbd> restart</span>
+            </div>
         </section>
 
-    </div>
-    <script src="script.js"></script>
+        <section id="results-container" class="panel results-panel hidden">
+            <div class="results-eyebrow">Session Complete</div>
+            <div class="results-score-wrap">
+                <div class="results-score" id="final-score">0</div>
+                <div class="results-denom" id="score-denom">/8</div>
+            </div>
+            <p class="results-caption">cards mastered</p>
+            <div class="results-bar-track"><div class="results-bar-fill" id="results-bar"></div></div>
+            <p class="results-msg" id="feedback-msg"></p>
+            <div class="results-actions">
+                <button id="restart-btn" class="btn btn-outline">↺ &nbsp;New Topic</button>
+                <button id="retry-btn" class="btn btn-primary">Retry Same Deck</button>
+            </div>
+        </section>
+
+    </main>
+</div>
+
+<div id="toast" class="toast"></div>
+<script src="script.js"></script>
 </body>
 </html>
