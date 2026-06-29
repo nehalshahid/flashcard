@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "dependencies": {
-    "@google/generative-ai": "latest"
+    "@google/generative-ai": "latest",
+    "mammoth": "^1.12.0",
+    "pdf-parse": "^2.4.5"
   }
 }
