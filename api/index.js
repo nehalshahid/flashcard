@@ -1,6 +1,3 @@
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const pdfParse = require('pdf-parse');
 import mammoth from 'mammoth';
 
 export const config = {
@@ -66,19 +63,17 @@ export default async function handler(req, res) {
         const filename = filePart.filename.toLowerCase();
 
         try {
-            if (filename.endsWith('.pdf')) {
-                const parsed = await pdfParse(filePart.data);
-                topic = parsed.text;
-            } else if (filename.endsWith('.docx')) {
+            if (filename.endsWith('.docx')) {
                 const result = await mammoth.extractRawText({ buffer: filePart.data });
                 topic = result.value;
             } else if (filename.endsWith('.txt')) {
                 topic = filePart.data.toString('utf-8');
+            } else if (filename.endsWith('.pdf')) {
+                return res.status(400).json({ error: 'PDF support coming soon. Please use DOCX or TXT for now.' });
             } else {
-                return res.status(400).json({ error: 'Unsupported file. Use PDF, DOCX, or TXT.' });
+                return res.status(400).json({ error: 'Unsupported file. Use DOCX or TXT.' });
             }
         } catch (parseErr) {
-            console.error('File parse error:', parseErr);
             return res.status(500).json({ error: 'Failed to read file.', details: parseErr.message });
         }
 
@@ -122,7 +117,6 @@ No markdown, no code blocks. Raw JSON only.`;
         res.json({ success: true, deck: flashcards });
 
     } catch (error) {
-        console.error('Groq error:', error);
         res.status(500).json({ error: 'AI generation failed.', details: error.message });
     }
 }
