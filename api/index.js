@@ -1,5 +1,3 @@
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
-
 export const config = {
     api: { bodyParser: false }
 };
@@ -39,18 +37,6 @@ function parseMultipart(buffer, boundary) {
     return parts;
 }
 
-async function extractPdfText(buffer) {
-    const uint8Array = new Uint8Array(buffer);
-    const pdf = await pdfjsLib.getDocument({ data: uint8Array }).promise;
-    let text = '';
-    for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-        text += content.items.map(item => item.str).join(' ') + '\n';
-    }
-    return text;
-}
-
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
@@ -58,7 +44,6 @@ export default async function handler(req, res) {
 
     let topic = '';
     let cardCount = 8;
-
     const contentType = req.headers['content-type'] || '';
 
     if (contentType.includes('multipart/form-data')) {
@@ -77,12 +62,21 @@ export default async function handler(req, res) {
         try {
             if (filename.endsWith('.txt')) {
                 topic = filePart.data.toString('utf-8');
-            } else if (filename.endsWith('.pdf')) {
-                topic = await extractPdfText(filePart.data);
+
             } else if (filename.endsWith('.docx')) {
                 const mammoth = await import('mammoth');
                 const result = await mammoth.default.extractRawText({ buffer: filePart.data });
                 topic = result.value;
+
+            } else if (filename.endsWith('.pdf')) {
+                // Extract text from PDF by parsing raw content streams
+                topic = extractPdfTextRaw(filePart.data);
+                if (!topic || topic.length < 10) {
+                    return res.status(400).json({ 
+                        error: 'Could not extract text from this PDF. Try copying the text and pasting it directly instead.' 
+                    });
+                }
+
             } else {
                 return res.status(400).json({ error: 'Unsupported file. Use PDF, DOCX, or TXT.' });
             }
@@ -129,7 +123,6 @@ Format:
         });
 
         const data = await response.json();
-
         if (!data.choices || !data.choices[0]) {
             return res.status(500).json({ error: 'Bad Groq response', raw: data });
         }
@@ -148,4 +141,34 @@ Format:
     } catch (error) {
         res.status(500).json({ error: 'AI generation failed.', details: error.message });
     }
+}
+
+// Pure JS PDF text extractor - no external packages needed
+function extractPdfTextRaw(buffer) {
+    const str = buffer.toString('latin1');
+    let text = '';
+    const streamRegex = /stream([\s\S]*?)endstream/g;
+    let match;
+    while ((match = streamRegex.exec(str)) !== null) {
+        const streamContent = match[1];
+        // Extract text from BT...ET blocks (PDF text objects)
+        const btRegex = /BT([\s\S]*?)ET/g;
+        let btMatch;
+        while ((btMatch = btRegex.exec(streamContent)) !== null) {
+            const block = btMatch[1];
+            // Extract strings in parentheses (Tj, TJ operators)
+            const strRegex = /\(([^)]*)\)\s*Tj|\(([^)]*)\)/g;
+            let strMatch;
+            while ((strMatch = strRegex.exec(block)) !== null) {
+                const extracted = (strMatch[1] || strMatch[2] || '')
+                    .replace(/\\n/g, '\n')
+                    .replace(/\\r/g, ' ')
+                    .replace(/\\t/g, ' ')
+                    .replace(/\\\(/g, '(')
+                    .replace(/\\\)/g, ')');
+                text += extracted + ' ';
+            }
+        }
+    }
+    return text.trim();
 }
