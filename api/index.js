@@ -9,6 +9,8 @@ export const config = {
     api: { bodyParser: false }
 };
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
 async function getRawBody(req) {
     return new Promise((resolve, reject) => {
         const chunks = [];
@@ -44,35 +46,40 @@ function parseMultipart(buffer, boundary) {
     return parts;
 }
 
-// ── PDF extractor with FlateDecode support ─────────────────────────────────
+// Normalize text from any source: replace fancy Unicode chars with plain ASCII
+function normalizeText(text) {
+    return text
+        .replace(/\u2018|\u2019/g, "'")   // curly single quotes
+        .replace(/\u201C|\u201D/g, '"')   // curly double quotes
+        .replace(/\u2013|\u2014/g, '-')   // en-dash, em-dash
+        .replace(/\u2026/g, '...')         // ellipsis
+        .replace(/\u00A0/g, ' ')           // non-breaking space
+        .replace(/[^\x00-\x7F]/g, ' ')    // any remaining non-ASCII
+        .replace(/\s+/g, ' ')              // collapse whitespace
+        .trim();
+}
+
+// ── PDF extractor (handles FlateDecode compressed streams) ───────────────────
+
 async function extractPdfText(buffer) {
     const latin = buffer.toString('latin1');
     let text = '';
 
-    // Find all objects that contain streams
     const objRegex = /(\d+ \d+ obj[\s\S]*?endobj)/g;
     let objMatch;
 
     while ((objMatch = objRegex.exec(latin)) !== null) {
         const obj = objMatch[1];
-
-        // Only process objects that have streams
         const streamStart = obj.indexOf('stream');
         const streamEnd = obj.indexOf('endstream');
         if (streamStart === -1 || streamEnd === -1) continue;
 
-        // Get the dict header (before the stream keyword)
         const dictPart = obj.slice(0, streamStart);
+        if (/\/Subtype\s*\/Image/i.test(dictPart)) continue;
 
-        // Skip non-page-content streams (images, fonts, etc.)
-        const isImage = /\/Subtype\s*\/Image/i.test(dictPart);
-        if (isImage) continue;
-
-        // Check if FlateDecode compressed
         const isFlate = /\/Filter\s*\/FlateDecode/i.test(dictPart) ||
                         /\/Filter\s*\[.*?FlateDecode.*?\]/i.test(dictPart);
 
-        // Raw stream bytes (skip "stream\r\n" or "stream\n")
         const streamKeyEnd = obj.indexOf('stream', streamStart) + 6;
         const afterKeyword = obj[streamKeyEnd] === '\r' ? streamKeyEnd + 2 : streamKeyEnd + 1;
         const rawLatin = obj.slice(afterKeyword, streamEnd);
@@ -80,15 +87,11 @@ async function extractPdfText(buffer) {
 
         let decoded = streamBuf;
         if (isFlate) {
-            try {
-                decoded = await inflate(streamBuf);
-            } catch {
-                try { decoded = await inflateRaw(streamBuf); } catch { continue; }
-            }
+            try { decoded = await inflate(streamBuf); }
+            catch { try { decoded = await inflateRaw(streamBuf); } catch { continue; } }
         }
 
-        const streamStr = decoded.toString('latin1');
-        text += extractTextFromContentStream(streamStr) + ' ';
+        text += extractTextFromContentStream(decoded.toString('latin1')) + ' ';
     }
 
     return text.trim();
@@ -96,36 +99,28 @@ async function extractPdfText(buffer) {
 
 function extractTextFromContentStream(str) {
     let out = '';
-
-    // BT...ET blocks
     const btRegex = /BT([\s\S]*?)ET/g;
     let btMatch;
     while ((btMatch = btRegex.exec(str)) !== null) {
         const block = btMatch[1];
-
-        // (string) Tj  or  (string) TJ
+        // Single string: (text) Tj
         const tjRegex = /\(([^)\\]*(?:\\.[^)\\]*)*)\)\s*Tj/g;
         let m;
         while ((m = tjRegex.exec(block)) !== null) {
             out += decodePdfString(m[1]) + ' ';
         }
-
-        // [(string) ...] TJ  — array form
+        // Array form: [(text)] TJ
         const tjArrayRegex = /\[([\s\S]*?)\]\s*TJ/g;
         while ((m = tjArrayRegex.exec(block)) !== null) {
-            const inner = m[1];
             const strRegex = /\(([^)\\]*(?:\\.[^)\\]*)*)\)/g;
             let sm;
-            while ((sm = strRegex.exec(inner)) !== null) {
+            while ((sm = strRegex.exec(m[1])) !== null) {
                 out += decodePdfString(sm[1]);
             }
             out += ' ';
         }
-
-        // Td / TD / T* operators imply newlines
         if (/\bTd\b|\bTD\b|\bT\*\b/.test(block)) out += '\n';
     }
-
     return out;
 }
 
@@ -139,7 +134,8 @@ function decodePdfString(s) {
         .replace(/\\\\/g, '\\');
 }
 
-// ── Main handler ────────────────────────────────────────────────────────────
+// ── Main handler ─────────────────────────────────────────────────────────────
+
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
@@ -167,8 +163,6 @@ export default async function handler(req, res) {
                 topic = filePart.data.toString('utf-8');
 
             } else if (filename.endsWith('.docx')) {
-                // Dynamic import works fine — the real issue was ESM/CJS interop.
-                // Use createRequire for reliability on Vercel.
                 const require = createRequire(import.meta.url);
                 const mammoth = require('mammoth');
                 const result = await mammoth.extractRawText({ buffer: filePart.data });
@@ -178,7 +172,7 @@ export default async function handler(req, res) {
                 topic = await extractPdfText(filePart.data);
                 if (!topic || topic.trim().length < 10) {
                     return res.status(400).json({
-                        error: 'Could not extract text from this PDF. Try copying the text and pasting it directly instead.'
+                        error: 'Could not extract text from this PDF. Try pasting the text directly instead.'
                     });
                 }
 
@@ -190,7 +184,6 @@ export default async function handler(req, res) {
         }
 
     } else {
-        // JSON body — parse it manually since bodyParser is disabled
         const rawBody = await getRawBody(req);
         const body = JSON.parse(rawBody.toString('utf-8'));
         topic = body.topic;
@@ -201,10 +194,10 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Not enough text extracted.' });
     }
 
-    // Keep input short so output tokens don't overflow the 8192 limit
-    const trimmedTopic = topic.trim().slice(0, 3000);
+    // Normalize all text to plain ASCII, then cap to 3000 chars
+    const cleanTopic = normalizeText(topic).slice(0, 3000);
 
-    const prompt = `Create exactly ${cardCount} flashcards about this topic: "${trimmedTopic}"
+    const prompt = `Create exactly ${cardCount} flashcards about this topic: ${JSON.stringify(cleanTopic)}
 
 Respond with ONLY a JSON array, nothing else. No explanation, no text before or after.
 Keep each answer concise — 1-2 sentences max.
@@ -239,7 +232,6 @@ Format:
 
         const choice = data.choices[0];
 
-        // Detect truncation before trying to parse
         if (choice.finish_reason === 'length') {
             return res.status(500).json({
                 error: 'Response was cut off. Try fewer cards or a shorter document.'
@@ -247,17 +239,11 @@ Format:
         }
 
         const text = choice.message.content.trim();
-
-        // Strip markdown fences if present, then extract the JSON array
-        // using a match instead of destructive regexes that can eat content
         const stripped = text.replace(/```json/gi, '').replace(/```/g, '');
         const match = stripped.match(/\[[\s\S]*\]/);
 
         if (!match) {
-            return res.status(500).json({
-                error: 'AI returned unexpected format.',
-                raw: text.slice(0, 500)  // surface enough to debug
-            });
+            return res.status(500).json({ error: 'AI returned unexpected format.', raw: text.slice(0, 300) });
         }
 
         const flashcards = JSON.parse(match[0]);
