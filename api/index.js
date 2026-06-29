@@ -210,7 +210,7 @@ Format:
                 messages: [
                     {
                         role: 'system',
-                        content: 'You are a flashcard generator. You only respond with valid JSON arrays. Write detailed answers of 3-5 sentences each — explain the concept fully, state why it matters, and include a concrete example. Never add any text before or after the JSON.'
+                        content: 'You are a flashcard generator. You only respond with valid JSON arrays. Write detailed answers of 2-3 sentences each — explain the concept fully, state why it matters, and include a concrete example.Answer should not be more than 3 lines. Never add any text before or after the JSON.'
                     },
                     { role: 'user', content: prompt }
                 ],
