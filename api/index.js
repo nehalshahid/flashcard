@@ -110,13 +110,24 @@ No markdown, no code blocks. Raw JSON only.`;
         });
 
         const data = await response.json();
-        const text = data.choices[0].message.content.trim();
-        // Extract JSON array even if model adds text before/after
-        const jsonMatch = text.match(/\[[\s\S]*\]/);
-        if (!jsonMatch) throw new Error('No JSON array found in response');
-        const flashcards = JSON.parse(jsonMatch[0]);
 
-        res.json({ success: true, deck: flashcards });
+// Debug: return raw response so we can see what Groq is sending
+if (!data.choices || !data.choices[0]) {
+    return res.status(500).json({ error: 'Bad Groq response', raw: data });
+}
+
+const text = data.choices[0].message.content.trim();
+const jsonMatch = text.match(/\[[\s\S]*\]/);
+
+if (!jsonMatch) {
+    return res.status(500).json({ 
+        error: 'No JSON found', 
+        raw_text: text.slice(0, 500) 
+    });
+}
+
+const flashcards = JSON.parse(jsonMatch[0]);
+res.json({ success: true, deck: flashcards });
 
     } catch (error) {
         res.status(500).json({ error: 'AI generation failed.', details: error.message });
