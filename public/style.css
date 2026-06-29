@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght=700;800&family=JetBrains+Mono:wght=400;500&family=Inter:wght=400;500&display=swap');
 
 :root {
     --bg: #0C0C0C;
@@ -466,14 +466,25 @@ select:focus { outline: none; border-color: var(--amber-dim); }
 .card-face {
     position: absolute;
     inset: 0;
-    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden; /* CRITICAL: Fixes Mobile Safari / iOS Chrome bleed-through */
+    backface-visibility: hidden;         /* Fixes Desktop Engines */
     border-radius: 6px;
     padding: 28px 32px 56px;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    overflow: hidden;
+    overflow-y: auto;                    /* CRITICAL: Allows longer answers to cleanly scroll on narrow displays */
     border: 1px solid var(--border);
+}
+
+/* BULLETPROOF MOBILE TOGGLE: Forces opposite side text layers to completely turn off rendering when flipped */
+.flashcard.flipped .card-front {
+    visibility: hidden;
+    pointer-events: none;
+}
+.flashcard:not(.flipped) .card-back {
+    visibility: hidden;
+    pointer-events: none;
 }
 
 .card-front {
@@ -516,7 +527,6 @@ select:focus { outline: none; border-color: var(--amber-dim); }
     font-weight: 700;
     line-height: 1.45;
     color: var(--text);
-    letter-spacing: -0.02em;
     position: relative;
     z-index: 1;
 }
@@ -703,7 +713,7 @@ select:focus { outline: none; border-color: var(--amber-dim); }
 @media (max-width: 768px) {
     .sidebar { display: none; }
     .main-col { margin-left: 0; padding: 32px 20px; justify-content: flex-start; padding-top: 48px; }
-    .flashcard { height: 260px; }
+    .flashcard { height: auto; min-height: 280px; } /* CRITICAL: Allows card container box to scale dynamically up instead of causing clipping overflows */
     .results-score { font-size: 4rem; }
 }
 
