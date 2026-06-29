@@ -235,14 +235,20 @@ Format:
         }
 
         const text = data.choices[0].message.content.trim();
-        const cleaned = text
-            .replace(/```json/gi, '')
-            .replace(/```/g, '')
-            .replace(/^[^[]*/, '')
-            .replace(/[^\]]*$/, '')
-            .trim();
 
-        const flashcards = JSON.parse(cleaned);
+        // Strip markdown fences if present, then extract the JSON array
+        // using a match instead of destructive regexes that can eat content
+        const stripped = text.replace(/```json/gi, '').replace(/```/g, '');
+        const match = stripped.match(/\[[\s\S]*\]/);
+
+        if (!match) {
+            return res.status(500).json({
+                error: 'AI returned unexpected format.',
+                raw: text.slice(0, 500)  // surface enough to debug
+            });
+        }
+
+        const flashcards = JSON.parse(match[0]);
         res.json({ success: true, deck: flashcards });
 
     } catch (error) {
