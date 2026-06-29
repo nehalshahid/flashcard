@@ -466,18 +466,16 @@ select:focus { outline: none; border-color: var(--amber-dim); }
 .card-face {
     position: absolute;
     inset: 0;
-    -webkit-backface-visibility: hidden; /* Fixes Mobile Safari / iOS Chrome bleed-through */
-    backface-visibility: hidden;         /* Fixes Desktop Engines */
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
     border-radius: 6px;
-    padding: 32px 24px;                  /* Comfortable padding for mobile viewports */
+    padding: 32px 28px;
     display: flex;
     flex-direction: column;
-    justify-content: center;             /* Keeps the content centered natively */
-    align-items: center;                 /* Horizontal centering */
-    text-align: center;
-    overflow-y: auto;                    /* Allows content to scroll gracefully if needed */
+    justify-content: stretch;             /* Forces the children elements to span the card height */
+    overflow-y: auto;                    /* Allows smooth scrolling if text runs super long */
     border: 1px solid var(--border);
-    -webkit-overflow-scrolling: touch; 
+    -webkit-overflow-scrolling: touch;
 }
 
 /* BULLETPROOF MOBILE TOGGLE: Forces opposite side text layers to completely turn off rendering when flipped */
@@ -532,7 +530,24 @@ select:focus { outline: none; border-color: var(--amber-dim); }
     color: var(--text);
     position: relative;
     z-index: 1;
-    margin: auto 0;                      /* Auto-centers text vertically without clipping */
+    
+    /* FIX: Force the text wrapper to fill the exact length of the card frame */
+    flex-grow: 1;
+    display: flex;
+    align-items: center;                 /* Centers the text vertically inside that full height */
+}
+
+.card-text-answer {
+    font-family: 'Inter', sans-serif;
+    font-weight: 400;
+    font-size: clamp(0.9rem, 1.8vw, 1.05rem);
+    line-height: 1.7;
+    letter-spacing: 0;
+    
+    /* FIX: Appends the same full-frame growth strategy to your answers */
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
 }
 
 .card-text-answer {
@@ -718,10 +733,9 @@ select:focus { outline: none; border-color: var(--amber-dim); }
     .sidebar { display: none; }
     .main-col { margin-left: 0; padding: 32px 20px; justify-content: flex-start; padding-top: 48px; }
     
-    /* FIX: Changed from rigid height to a fluid dynamic min-height */
+    /* Set this to whatever standard mobile height you prefer (e.g., 320px or 360px) */
     .flashcard { 
-        height: auto; 
-        min-height: 320px; 
+        height: 340px; 
     }
     
     .results-score { font-size: 4rem; }
