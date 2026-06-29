@@ -135,11 +135,17 @@ body {
     margin-left: var(--sidebar-w);
     flex: 1;
     padding: 56px 48px;
-    max-width: 720px;
+    max-width: 100%;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
     justify-content: center;
+    align-items: center;
+}
+
+.main-col > * {
+    width: 100%;
+    max-width: 680px;
 }
 
 /* ── PANEL ── */
