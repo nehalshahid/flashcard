@@ -77,7 +77,7 @@ async function extractPdfText(buffer) {
         if (/\/Subtype\s*\/Image/i.test(dictPart)) continue;
 
         const isFlate = /\/Filter\s*\/FlateDecode/i.test(dictPart) ||
-                        \/Filter\s*\[.*?FlateDecode.*?\]/i.test(dictPart);
+                /\/Filter\s*\[.*?FlateDecode.*?\]/i.test(dictPart);
 
         const streamKeyEnd = obj.indexOf('stream', streamStart) + 6;
         const afterKeyword = obj[streamKeyEnd] === '\r' ? streamKeyEnd + 2 : streamKeyEnd + 1;
