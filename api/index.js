@@ -243,7 +243,20 @@ Format:
         
         let flashcards = null;
         try {
-            flashcards = JSON.parse(stripped);
+            // AUTO-REPAIR: If it ends with a valid object but misses the closing array bracket, fix it!
+            let fixedStripped = stripped.trim();
+            if (fixedStripped.startsWith('[') && !fixedStripped.endsWith(']')) {
+                if (fixedStripped.endsWith('}')) {
+                    fixedStripped += ']';
+                } else {
+                    // If it cut off mid-sentence, find the last complete card
+                    const lastGoodObj = fixedStripped.lastIndexOf('}');
+                    if (lastGoodObj !== -1) {
+                        fixedStripped = fixedStripped.slice(0, lastGoodObj + 1) + ']';
+                    }
+                }
+            }
+            flashcards = JSON.parse(fixedStripped);
         } catch (e) {
             const match = stripped.match(/\[[\s\S]*\]/);
             if (match) {
