@@ -1,317 +1,255 @@
-let flashcardsDeck = [];
-let originalDeck = [];
-let currentCardIndex = 0;
-let masteredScore = 0;
-let lastTopic = '';
-let lastCount = 8;
+import { createRequire } from 'module';
+import zlib from 'zlib';
+import { promisify } from 'util';
 
-// DOM
-const setupContainer = document.getElementById('setup-container');
-const loadingContainer = document.getElementById('loading-container');
-const flashcardContainer = document.getElementById('flashcard-container');
-const resultsContainer = document.getElementById('results-container');
-const topicInput = document.getElementById('topic-input');
-const cardCountSelect = document.getElementById('card-count');
-const generateBtn = document.getElementById('generate-btn');
-const flashcard = document.getElementById('flashcard');
-const questionText = document.getElementById('question-text');
-const answerText = document.getElementById('answer-text');
-const cardCounter = document.getElementById('card-counter');
-const scoreCounter = document.getElementById('score-counter');
-const progressBar = document.getElementById('progress-bar');
-const ghostFront = document.getElementById('ghost-front');
-const ghostBack = document.getElementById('ghost-back');
-const reviewBtn = document.getElementById('review-btn');
-const correctBtn = document.getElementById('correct-btn');
-const restartBtn = document.getElementById('restart-btn');
-const retryBtn = document.getElementById('retry-btn');
-const finalScore = document.getElementById('final-score');
-const scoreDenom = document.getElementById('score-denom');
-const feedbackMsg = document.getElementById('feedback-msg');
-const resultsBar = document.getElementById('results-bar');
-const toast = document.getElementById('toast');
+const inflate = promisify(zlib.inflate);
+const inflateRaw = promisify(zlib.inflateRaw);
 
-// File upload handling
-const uploadZone = document.getElementById('upload-zone');
-const fileInput = document.getElementById('file-input');
-const uploadLabel = document.getElementById('upload-label');
-let uploadedFile = null;
+export const config = {
+    api: { bodyParser: false }
+};
 
-uploadZone.addEventListener('click', () => fileInput.click());
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
-fileInput.addEventListener('change', () => {
-    const file = fileInput.files[0];
-    if (file) {
-        uploadedFile = file;
-        uploadLabel.textContent = `✓ ${file.name}`;
-        uploadZone.classList.add('has-file');
-    }
-});
-
-uploadZone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    uploadZone.classList.add('dragover');
-});
-
-uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
-
-uploadZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    uploadZone.classList.remove('dragover');
-    const file = e.dataTransfer.files[0];
-    if (file) {
-        uploadedFile = file;
-        uploadLabel.textContent = `✓ ${file.name}`;
-        uploadZone.classList.add('has-file');
-        fileInput.files = e.dataTransfer.files;
-    }
-});
-
-// Events
-generateBtn.addEventListener('click', generateDeck);
-flashcard.addEventListener('click', flipCard);
-correctBtn.addEventListener('click', () => handleAction(true));
-reviewBtn.addEventListener('click', () => handleAction(false));
-restartBtn.addEventListener('click', resetToSetup);
-retryBtn.addEventListener('click', retryDeck);
-
-// Keyboard shortcuts
-document.addEventListener('keydown', (e) => {
-    if (!flashcardContainer.classList.contains('hidden')) {
-        if (e.code === 'Space') { e.preventDefault(); flipCard(); }
-        if (e.code === 'ArrowRight') handleAction(true);
-        if (e.code === 'ArrowLeft') handleAction(false);
-        if (e.code === 'Escape') resetToSetup();
-    }
-    if (!setupContainer.classList.contains('hidden') && e.code === 'Enter' && e.ctrlKey) {
-        generateDeck();
-    }
-});
-
-function flipCard() {
-    flashcard.classList.toggle('flipped');
-}
-
-async function generateDeck() {
-    const rawTopic = topicInput.value.trim();
-    if (!rawTopic && !uploadedFile) { showToast('Enter a topic or upload a file'); return; }
-
-    lastTopic = rawTopic;
-    lastCount = parseInt(cardCountSelect.value);
-
-    setupContainer.classList.add('hidden');
-    loadingContainer.classList.remove('hidden');
-
-    await attemptGenerate(rawTopic, lastCount, 0);
-}
-
-async function attemptGenerate(rawTopic, cardCount, attempt) {
-    try {
-        let response;
-
-        if (uploadedFile) {
-            const formData = new FormData();
-            formData.append('file', uploadedFile);
-            formData.append('cardCount', cardCount);
-            response = await fetch('/api/generate-flashcards', {
-                method: 'POST',
-                body: formData
-            });
-        } else {
-            response = await fetch('/api/generate-flashcards', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ topic: rawTopic, cardCount }),
-            });
-        }
-
-        // Rate limited — wait and retry up to 2 times
-        if (response.status === 429 || response.status === 500) {
-            const data = await response.json().catch(() => ({}));
-            const isRateLimit = response.status === 429 ||
-                (data.raw && data.raw.error && data.raw.error.code === 'rate_limit_exceeded');
-
-            if (isRateLimit && attempt < 2) {
-                await countdown(15); // wait 15s then retry
-                return attemptGenerate(rawTopic, cardCount, attempt + 1);
-            }
-            throw new Error(data.error || 'Generation failed');
-        }
-
-        if (!response.ok) throw new Error('Bad response');
-        const data = await response.json();
-
-        if (data.success && data.deck && data.deck.length > 0) {
-            flashcardsDeck = data.deck;
-            originalDeck = [...data.deck];
-            currentCardIndex = 0;
-            masteredScore = 0;
-            loadingContainer.classList.add('hidden');
-            flashcardContainer.classList.remove('hidden');
-            renderCard();
-        } else {
-            throw new Error('Empty deck');
-        }
-    } catch (error) {
-        console.error(error);
-        showToast(error.message || 'Failed to generate — try again');
-        loadingContainer.classList.add('hidden');
-        setupContainer.classList.remove('hidden');
-    }
-}
-
-function countdown(seconds) {
-    return new Promise(resolve => {
-        const loaderSub = document.querySelector('.loader-sub');
-        const loaderText = document.querySelector('.loader-text');
-        const originalSub = loaderSub.textContent;
-        const originalText = loaderText.innerHTML;
-        let remaining = seconds;
-
-        const tick = () => {
-            loaderText.innerHTML = `Rate limit hit — retrying<span class="blink">_</span>`;
-            loaderSub.textContent = `Waiting ${remaining}s before retry...`;
-            if (remaining <= 0) {
-                loaderText.innerHTML = originalText;
-                loaderSub.textContent = originalSub;
-                resolve();
-                return;
-            }
-            remaining--;
-            setTimeout(tick, 1000);
-        };
-        tick();
+async function getRawBody(req) {
+    return new Promise((resolve, reject) => {
+        const chunks = [];
+        req.on('data', chunk => chunks.push(chunk));
+        req.on('end', () => resolve(Buffer.concat(chunks)));
+        req.on('error', reject);
     });
 }
 
-function renderCard() {
-    flashcard.classList.remove('flipped');
-    const card = flashcardsDeck[currentCardIndex];
-    const num = String(currentCardIndex + 1);
-
-    setTimeout(() => {
-        questionText.textContent = card.question;
-        answerText.textContent = card.answer;
-        ghostFront.textContent = num;
-        ghostBack.textContent = num;
-    }, 120);
-
-    cardCounter.textContent = `${currentCardIndex + 1} / ${flashcardsDeck.length}`;
-    scoreCounter.textContent = `${masteredScore} mastered`;
-    progressBar.style.width = `${(currentCardIndex / flashcardsDeck.length) * 100}%`;
-}
-
-function handleAction(isMastered) {
-    if (isMastered) {
-        masteredScore++;
-        // Bump animation on score badge
-        scoreCounter.classList.add('bump');
-        setTimeout(() => scoreCounter.classList.remove('bump'), 300);
-        currentCardIndex++;
-        if (currentCardIndex >= flashcardsDeck.length) {
-            showResults();
-        } else {
-            renderCard();
-        }
-    } else {
-        // Restart from card 1
-        currentCardIndex = 0;
-        masteredScore = 0;
-        flashcard.classList.remove('flipped');
-        renderCard();
-        showToast('Starting over from card 1');
-    }
-}
-
-function showResults() {
-    flashcardContainer.classList.add('hidden');
-    resultsContainer.classList.remove('hidden');
-
-    const total = originalDeck.length;
-    const pct = Math.round((masteredScore / total) * 100);
-
-    finalScore.textContent = masteredScore;
-    scoreDenom.textContent = `/${total}`;
-
-    setTimeout(() => {
-        resultsBar.style.width = `${pct}%`;
-    }, 100);
-
-    if (pct === 100) {
-        feedbackMsg.textContent = "Flawless. Every concept locked in — you're ready.";
-        launchConfetti();
-    } else if (pct >= 75) {
-        feedbackMsg.textContent = "Strong run. A couple of edges to clean up — one more pass will seal it.";
-    } else if (pct >= 50) {
-        feedbackMsg.textContent = "Decent start. Review the ones you missed and go again.";
-    } else {
-        feedbackMsg.textContent = "Rough first pass — that's fine. Generate the deck again and push through it.";
-    }
-}
-
-function resetToSetup() {
-    resultsContainer.classList.add('hidden');
-    flashcardContainer.classList.add('hidden');
-    loadingContainer.classList.add('hidden');
-    setupContainer.classList.remove('hidden');
-    progressBar.style.width = '0%';
-}
-
-function retryDeck() {
-    flashcardsDeck = [...originalDeck];
-    currentCardIndex = 0;
-    masteredScore = 0;
-    resultsContainer.classList.add('hidden');
-    flashcardContainer.classList.remove('hidden');
-    renderCard();
-}
-
-function showToast(msg) {
-    toast.textContent = msg;
-    toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 2800);
-}
-
-// Confetti
-function launchConfetti() {
-    const canvas = document.getElementById('confetti-canvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-
-    const colors = ['#F0A500', '#00BFA5', '#E4E4DC', '#E05252', '#ffffff'];
-    const pieces = Array.from({ length: 120 }, () => ({
-        x: Math.random() * canvas.width,
-        y: -10,
-        w: Math.random() * 8 + 4,
-        h: Math.random() * 4 + 2,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        speed: Math.random() * 3 + 2,
-        angle: Math.random() * 360,
-        spin: (Math.random() - 0.5) * 6,
-        drift: (Math.random() - 0.5) * 2
-    }));
-
-    let frame;
-    function draw() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        pieces.forEach(p => {
-            ctx.save();
-            ctx.translate(p.x, p.y);
-            ctx.rotate(p.angle * Math.PI / 180);
-            ctx.fillStyle = p.color;
-            ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
-            ctx.restore();
-            p.y += p.speed;
-            p.x += p.drift;
-            p.angle += p.spin;
+function parseMultipart(buffer, boundary) {
+    const parts = [];
+    const boundaryBuffer = Buffer.from('--' + boundary);
+    let start = 0;
+    while (start < buffer.length) {
+        const boundaryIndex = buffer.indexOf(boundaryBuffer, start);
+        if (boundaryIndex === -1) break;
+        const headerStart = boundaryIndex + boundaryBuffer.length + 2;
+        const headerEnd = buffer.indexOf(Buffer.from('\r\n\r\n'), headerStart);
+        if (headerEnd === -1) break;
+        const headerStr = buffer.slice(headerStart, headerEnd).toString();
+        const dataStart = headerEnd + 4;
+        const nextBoundary = buffer.indexOf(boundaryBuffer, dataStart);
+        const dataEnd = nextBoundary === -1 ? buffer.length : nextBoundary - 2;
+        const nameMatch = headerStr.match(/name="([^"]+)"/);
+        const filenameMatch = headerStr.match(/filename="([^"]+)"/);
+        parts.push({
+            name: nameMatch ? nameMatch[1] : '',
+            filename: filenameMatch ? filenameMatch[1] : null,
+            data: buffer.slice(dataStart, dataEnd)
         });
-        if (pieces.some(p => p.y < canvas.height)) {
-            frame = requestAnimationFrame(draw);
-        } else {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
+        start = nextBoundary === -1 ? buffer.length : nextBoundary;
     }
-    draw();
-    setTimeout(() => { cancelAnimationFrame(frame); ctx.clearRect(0, 0, canvas.width, canvas.height); }, 4000);
+    return parts;
+}
+
+// Normalize text from any source: replace fancy Unicode chars with plain ASCII
+function normalizeText(text) {
+    return text
+        .replace(/\u2018|\u2019/g, "'")   // curly single quotes
+        .replace(/\u201C|\u201D/g, '"')   // curly double quotes
+        .replace(/\u2013|\u2014/g, '-')   // en-dash, em-dash
+        .replace(/\u2026/g, '...')         // ellipsis
+        .replace(/\u00A0/g, ' ')           // non-breaking space
+        .replace(/[^\x00-\x7F]/g, ' ')    // any remaining non-ASCII
+        .replace(/\s+/g, ' ')              // collapse whitespace
+        .trim();
+}
+
+// ── PDF extractor (handles FlateDecode compressed streams) ───────────────────
+
+async function extractPdfText(buffer) {
+    const latin = buffer.toString('latin1');
+    let text = '';
+
+    const objRegex = /(\d+ \d+ obj[\s\S]*?endobj)/g;
+    let objMatch;
+
+    while ((objMatch = objRegex.exec(latin)) !== null) {
+        const obj = objMatch[1];
+        const streamStart = obj.indexOf('stream');
+        const streamEnd = obj.indexOf('endstream');
+        if (streamStart === -1 || streamEnd === -1) continue;
+
+        const dictPart = obj.slice(0, streamStart);
+        if (/\/Subtype\s*\/Image/i.test(dictPart)) continue;
+
+        const isFlate = /\/Filter\s*\/FlateDecode/i.test(dictPart) ||
+                        /\/Filter\s*\[.*?FlateDecode.*?\]/i.test(dictPart);
+
+        const streamKeyEnd = obj.indexOf('stream', streamStart) + 6;
+        const afterKeyword = obj[streamKeyEnd] === '\r' ? streamKeyEnd + 2 : streamKeyEnd + 1;
+        const rawLatin = obj.slice(afterKeyword, streamEnd);
+        const streamBuf = Buffer.from(rawLatin, 'latin1');
+
+        let decoded = streamBuf;
+        if (isFlate) {
+            try { decoded = await inflate(streamBuf); }
+            catch { try { decoded = await inflateRaw(streamBuf); } catch { continue; } }
+        }
+
+        text += extractTextFromContentStream(decoded.toString('latin1')) + ' ';
+    }
+
+    return text.trim();
+}
+
+function extractTextFromContentStream(str) {
+    let out = '';
+    const btRegex = /BT([\s\S]*?)ET/g;
+    let btMatch;
+    while ((btMatch = btRegex.exec(str)) !== null) {
+        const block = btMatch[1];
+        // Single string: (text) Tj
+        const tjRegex = /\(([^)\\]*(?:\\.[^)\\]*)*)\)\s*Tj/g;
+        let m;
+        while ((m = tjRegex.exec(block)) !== null) {
+            out += decodePdfString(m[1]) + ' ';
+        }
+        // Array form: [(text)] TJ
+        const tjArrayRegex = /\[([\s\S]*?)\]\s*TJ/g;
+        while ((m = tjArrayRegex.exec(block)) !== null) {
+            const strRegex = /\(([^)\\]*(?:\\.[^)\\]*)*)\)/g;
+            let sm;
+            while ((sm = strRegex.exec(m[1])) !== null) {
+                out += decodePdfString(sm[1]);
+            }
+            out += ' ';
+        }
+        if (/\bTd\b|\bTD\b|\bT\*\b/.test(block)) out += '\n';
+    }
+    return out;
+}
+
+function decodePdfString(s) {
+    return s
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, ' ')
+        .replace(/\\t/g, ' ')
+        .replace(/\\\(/g, '(')
+        .replace(/\\\)/g, ')')
+        .replace(/\\\\/g, '\\');
+}
+
+// ── Main handler ─────────────────────────────────────────────────────────────
+
+export default async function handler(req, res) {
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    let topic = '';
+    let cardCount = 8;
+    const contentType = req.headers['content-type'] || '';
+
+    if (contentType.includes('multipart/form-data')) {
+        const rawBody = await getRawBody(req);
+        const boundary = contentType.split('boundary=')[1];
+        const parts = parseMultipart(rawBody, boundary);
+
+        const filePart = parts.find(p => p.filename);
+        const countPart = parts.find(p => p.name === 'cardCount');
+
+        if (countPart) cardCount = parseInt(countPart.data.toString()) || 8;
+        if (!filePart) return res.status(400).json({ error: 'No file found.' });
+
+        const filename = filePart.filename.toLowerCase();
+
+        try {
+            if (filename.endsWith('.txt')) {
+                topic = filePart.data.toString('utf-8');
+
+            } else if (filename.endsWith('.docx')) {
+                const require = createRequire(import.meta.url);
+                const mammoth = require('mammoth');
+                const result = await mammoth.extractRawText({ buffer: filePart.data });
+                topic = result.value;
+
+            } else if (filename.endsWith('.pdf')) {
+                topic = await extractPdfText(filePart.data);
+                if (!topic || topic.trim().length < 10) {
+                    return res.status(400).json({
+                        error: 'Could not extract text from this PDF. Try pasting the text directly instead.'
+                    });
+                }
+
+            } else {
+                return res.status(400).json({ error: 'Unsupported file. Use PDF, DOCX, or TXT.' });
+            }
+        } catch (parseErr) {
+            return res.status(500).json({ error: 'Failed to read file.', details: parseErr.message });
+        }
+
+    } else {
+        const rawBody = await getRawBody(req);
+        const body = JSON.parse(rawBody.toString('utf-8'));
+        topic = body.topic;
+        cardCount = body.cardCount || 8;
+    }
+
+    if (!topic || topic.trim().length < 5) {
+        return res.status(400).json({ error: 'Not enough text extracted.' });
+    }
+
+    // Normalize all text to plain ASCII, then cap to 3000 chars
+    const cleanTopic = normalizeText(topic).slice(0, 800); // keep well under 6000 TPM limit
+
+    const prompt = `Create exactly ${cardCount} flashcards about this topic: ${JSON.stringify(cleanTopic)}
+
+Respond with ONLY a JSON array, nothing else. No explanation, no text before or after.
+Keep each answer concise — 1-2 sentences max.
+Format:
+[{"question":"...","answer":"..."},{"question":"...","answer":"..."}]`;
+
+    try {
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: 'llama-3.1-8b-instant',
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'You are a flashcard generator. You only respond with valid JSON arrays. Keep each answer to 1-2 sentences. Never add any text before or after the JSON.'
+                    },
+                    { role: 'user', content: prompt }
+                ],
+                max_tokens: 1000,
+                temperature: 0.3
+            })
+        });
+
+        const data = await response.json();
+        if (!data.choices || !data.choices[0]) {
+            return res.status(500).json({ error: 'Bad Groq response', raw: data });
+        }
+
+        const choice = data.choices[0];
+
+        if (choice.finish_reason === 'length') {
+            return res.status(500).json({
+                error: 'Response was cut off. Try fewer cards or a shorter document.'
+            });
+        }
+
+        const text = choice.message.content.trim();
+        const stripped = text.replace(/```json/gi, '').replace(/```/g, '');
+        const match = stripped.match(/\[[\s\S]*\]/);
+
+        if (!match) {
+            return res.status(500).json({ error: 'AI returned unexpected format.', raw: text.slice(0, 300) });
+        }
+
+        const flashcards = JSON.parse(match[0]);
+        res.json({ success: true, deck: flashcards });
+
+    } catch (error) {
+        res.status(500).json({ error: 'AI generation failed.', details: error.message });
+    }
 }
