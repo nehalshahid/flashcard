@@ -77,7 +77,7 @@ async function extractPdfText(buffer) {
         if (/\/Subtype\s*\/Image/i.test(dictPart)) continue;
 
         const isFlate = /\/Filter\s*\/FlateDecode/i.test(dictPart) ||
-                        /\/Filter\s*\[.*?FlateDecode.*?\]/i.test(dictPart);
+                        \/Filter\s*\[.*?FlateDecode.*?\]/i.test(dictPart);
 
         const streamKeyEnd = obj.indexOf('stream', streamStart) + 6;
         const afterKeyword = obj[streamKeyEnd] === '\r' ? streamKeyEnd + 2 : streamKeyEnd + 1;
@@ -142,29 +142,27 @@ export default async function handler(req, res) {
     let cardCount = 8;
     const contentType = req.headers['content-type'] || '';
 
-    if (contentType.includes('multipart/form-data')) {
-        const rawBody = await getRawBody(req);
-        const boundary = contentType.split('boundary=')[1];
-        const parts = parseMultipart(rawBody, boundary);
+    try {
+        if (contentType.includes('multipart/form-data')) {
+            const rawBody = await getRawBody(req);
+            const boundary = contentType.split('boundary=')[1];
+            const parts = parseMultipart(rawBody, boundary);
 
-        const filePart = parts.find(p => p.filename);
-        const countPart = parts.find(p => p.name === 'cardCount');
+            const filePart = parts.find(p => p.filename);
+            const countPart = parts.find(p => p.name === 'cardCount');
 
-        if (countPart) cardCount = parseInt(countPart.data.toString()) || 8;
-        if (!filePart) return res.status(400).json({ error: 'No file found.' });
+            if (countPart) cardCount = parseInt(countPart.data.toString()) || 8;
+            if (!filePart) return res.status(400).json({ error: 'No file found.' });
 
-        const filename = filePart.filename.toLowerCase();
+            const filename = filePart.filename.toLowerCase();
 
-        try {
             if (filename.endsWith('.txt')) {
                 topic = filePart.data.toString('utf-8');
-
             } else if (filename.endsWith('.docx')) {
                 const require = createRequire(import.meta.url);
                 const mammoth = require('mammoth');
                 const result = await mammoth.extractRawText({ buffer: filePart.data });
                 topic = result.value;
-
             } else if (filename.endsWith('.pdf')) {
                 topic = await extractPdfText(filePart.data);
                 if (!topic || topic.trim().length < 10) {
@@ -172,27 +170,25 @@ export default async function handler(req, res) {
                         error: 'Could not extract text from this PDF. Try pasting the text directly instead.'
                     });
                 }
-
             } else {
                 return res.status(400).json({ error: 'Unsupported file. Use PDF, DOCX, or TXT.' });
             }
-        } catch (parseErr) {
-            return res.status(500).json({ error: 'Failed to read file.', details: parseErr.message });
-        }
 
-    } else {
-        const rawBody = await getRawBody(req);
-        const body = JSON.parse(rawBody.toString('utf-8'));
-        topic = body.topic;
-        cardCount = body.cardCount || 8;
+        } else {
+            const rawBody = await getRawBody(req);
+            const body = JSON.parse(rawBody.toString('utf-8'));
+            topic = body.topic;
+            cardCount = body.cardCount || 8;
+        }
+    } catch (parseErr) {
+        return res.status(500).json({ error: 'Failed to process request data.', details: parseErr.message });
     }
 
     if (!topic || topic.trim().length < 5) {
         return res.status(400).json({ error: 'Not enough text extracted.' });
     }
 
-    // Cap input to keep total tokens (input + output) under Groq's 6000 TPM free tier limit.
-    // 800 chars ≈ 200 tokens input, leaving ~3000 tokens for detailed answers.
+    // Normalized and sliced safely to ~200 input tokens.
     const cleanTopic = normalizeText(topic).slice(0, 800);
 
     const prompt = `Create exactly ${cardCount} flashcards about this topic: ${JSON.stringify(cleanTopic)}
@@ -218,12 +214,20 @@ Format:
                     },
                     { role: 'user', content: prompt }
                 ],
-                max_tokens: 6000,
+                // FIXED: Changed from 6000 to 2500. 
+                // Leaves massive headroom for input + output to fit safely inside the 6k total TPM tier.
+                max_tokens: 2500,
                 temperature: 0.3
             })
         });
 
         const data = await response.json();
+        
+        // Handle explicit API/Rate Limit Errors safely instead of crashing
+        if (data.error) {
+            return res.status(500).json({ error: 'Groq API Error', details: data.error.message });
+        }
+
         if (!data.choices || !data.choices[0]) {
             return res.status(500).json({ error: 'Bad Groq response', raw: data });
         }
@@ -232,7 +236,7 @@ Format:
 
         if (choice.finish_reason === 'length') {
             return res.status(500).json({
-                error: 'Response was cut off. Try fewer cards or a shorter document.'
+                error: 'Response was cut off because the details were too long. Try requesting 1 or 2 fewer cards.'
             });
         }
 
