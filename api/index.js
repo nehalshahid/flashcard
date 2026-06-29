@@ -46,16 +46,15 @@ function parseMultipart(buffer, boundary) {
     return parts;
 }
 
-// Normalize text from any source: replace fancy Unicode chars with plain ASCII
 function normalizeText(text) {
     return text
-        .replace(/\u2018|\u2019/g, "'")   // curly single quotes
-        .replace(/\u201C|\u201D/g, '"')   // curly double quotes
-        .replace(/\u2013|\u2014/g, '-')   // en-dash, em-dash
-        .replace(/\u2026/g, '...')         // ellipsis
-        .replace(/\u00A0/g, ' ')           // non-breaking space
-        .replace(/[^\x00-\x7F]/g, ' ')    // any remaining non-ASCII
-        .replace(/\s+/g, ' ')              // collapse whitespace
+        .replace(/\u2018|\u2019/g, "'")
+        .replace(/\u201C|\u201D/g, '"')
+        .replace(/\u2013|\u2014/g, '-')
+        .replace(/\u2026/g, '...')
+        .replace(/\u00A0/g, ' ')
+        .replace(/[^\x00-\x7F]/g, ' ')
+        .replace(/\s+/g, ' ')
         .trim();
 }
 
@@ -103,13 +102,11 @@ function extractTextFromContentStream(str) {
     let btMatch;
     while ((btMatch = btRegex.exec(str)) !== null) {
         const block = btMatch[1];
-        // Single string: (text) Tj
         const tjRegex = /\(([^)\\]*(?:\\.[^)\\]*)*)\)\s*Tj/g;
         let m;
         while ((m = tjRegex.exec(block)) !== null) {
             out += decodePdfString(m[1]) + ' ';
         }
-        // Array form: [(text)] TJ
         const tjArrayRegex = /\[([\s\S]*?)\]\s*TJ/g;
         while ((m = tjArrayRegex.exec(block)) !== null) {
             const strRegex = /\(([^)\\]*(?:\\.[^)\\]*)*)\)/g;
@@ -194,13 +191,14 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Not enough text extracted.' });
     }
 
-    // Normalize all text to plain ASCII, then cap to 3000 chars
-    const cleanTopic = normalizeText(topic).slice(0, 800); // keep well under 6000 TPM limit
+    // Cap input to keep total tokens (input + output) under Groq's 6000 TPM free tier limit.
+    // 800 chars ≈ 200 tokens input, leaving ~3000 tokens for detailed answers.
+    const cleanTopic = normalizeText(topic).slice(0, 800);
 
     const prompt = `Create exactly ${cardCount} flashcards about this topic: ${JSON.stringify(cleanTopic)}
 
 Respond with ONLY a JSON array, nothing else. No explanation, no text before or after.
-Keep each answer concise — 1-2 sentences max.
+Each answer must be detailed and thorough: fully explain the concept, state why it matters, and include a concrete example. Aim for 3-5 sentences per answer.
 Format:
 [{"question":"...","answer":"..."},{"question":"...","answer":"..."}]`;
 
@@ -216,11 +214,11 @@ Format:
                 messages: [
                     {
                         role: 'system',
-                        content: 'You are a flashcard generator. You only respond with valid JSON arrays. Write detailed, thorough answers of 3-5 sentences each — explain the concept fully, include why it matters, and give an example where helpful. Never add any text before or after the JSON.'
+                        content: 'You are a flashcard generator. You only respond with valid JSON arrays. Write detailed answers of 3-5 sentences each — explain the concept fully, state why it matters, and include a concrete example. Never add any text before or after the JSON.'
                     },
                     { role: 'user', content: prompt }
                 ],
-                max_tokens: 1000,
+                max_tokens: 3000,
                 temperature: 0.3
             })
         });
