@@ -111,8 +111,10 @@ No markdown, no code blocks. Raw JSON only.`;
 
         const data = await response.json();
         const text = data.choices[0].message.content.trim();
-        const clean = text.replace(/```json|```/g, '').trim();
-        const flashcards = JSON.parse(clean);
+        // Extract JSON array even if model adds text before/after
+        const jsonMatch = text.match(/\[[\s\S]*\]/);
+        if (!jsonMatch) throw new Error('No JSON array found in response');
+        const flashcards = JSON.parse(jsonMatch[0]);
 
         res.json({ success: true, deck: flashcards });
 
