@@ -77,7 +77,7 @@ async function extractPdfText(buffer) {
         if (/\/Subtype\s*\/Image/i.test(dictPart)) continue;
 
         const isFlate = /\/Filter\s*\/FlateDecode/i.test(dictPart) ||
-                /\/Filter\s*\[.*?FlateDecode.*?\]/i.test(dictPart);
+                        /\/Filter\s*\[.*?FlateDecode.*?\]/i.test(dictPart);
 
         const streamKeyEnd = obj.indexOf('stream', streamStart) + 6;
         const afterKeyword = obj[streamKeyEnd] === '\r' ? streamKeyEnd + 2 : streamKeyEnd + 1;
@@ -206,7 +206,7 @@ Format:
                 'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
             },
             body: JSON.stringify({
-                model: 'llama-3.1-8b-instant',
+                model: 'llama-3.3-70b-versatile',
                 messages: [
                     {
                         role: 'system',
@@ -214,9 +214,7 @@ Format:
                     },
                     { role: 'user', content: prompt }
                 ],
-                // FIXED: Changed from 6000 to 2500. 
-                // Leaves massive headroom for input + output to fit safely inside the 6k total TPM tier.
-                max_tokens: 2500,
+                max_tokens: 3500,
                 temperature: 0.3
             })
         });
