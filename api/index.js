@@ -1,3 +1,10 @@
+import { createRequire } from 'module';
+import zlib from 'zlib';
+import { promisify } from 'util';
+
+const inflate = promisify(zlib.inflate);
+const inflateRaw = promisify(zlib.inflateRaw);
+
 export const config = {
     api: { bodyParser: false }
 };
@@ -37,6 +44,102 @@ function parseMultipart(buffer, boundary) {
     return parts;
 }
 
+// ── PDF extractor with FlateDecode support ─────────────────────────────────
+async function extractPdfText(buffer) {
+    const latin = buffer.toString('latin1');
+    let text = '';
+
+    // Find all objects that contain streams
+    const objRegex = /(\d+ \d+ obj[\s\S]*?endobj)/g;
+    let objMatch;
+
+    while ((objMatch = objRegex.exec(latin)) !== null) {
+        const obj = objMatch[1];
+
+        // Only process objects that have streams
+        const streamStart = obj.indexOf('stream');
+        const streamEnd = obj.indexOf('endstream');
+        if (streamStart === -1 || streamEnd === -1) continue;
+
+        // Get the dict header (before the stream keyword)
+        const dictPart = obj.slice(0, streamStart);
+
+        // Skip non-page-content streams (images, fonts, etc.)
+        const isImage = /\/Subtype\s*\/Image/i.test(dictPart);
+        if (isImage) continue;
+
+        // Check if FlateDecode compressed
+        const isFlate = /\/Filter\s*\/FlateDecode/i.test(dictPart) ||
+                        /\/Filter\s*\[.*?FlateDecode.*?\]/i.test(dictPart);
+
+        // Raw stream bytes (skip "stream\r\n" or "stream\n")
+        const streamKeyEnd = obj.indexOf('stream', streamStart) + 6;
+        const afterKeyword = obj[streamKeyEnd] === '\r' ? streamKeyEnd + 2 : streamKeyEnd + 1;
+        const rawLatin = obj.slice(afterKeyword, streamEnd);
+        const streamBuf = Buffer.from(rawLatin, 'latin1');
+
+        let decoded = streamBuf;
+        if (isFlate) {
+            try {
+                decoded = await inflate(streamBuf);
+            } catch {
+                try { decoded = await inflateRaw(streamBuf); } catch { continue; }
+            }
+        }
+
+        const streamStr = decoded.toString('latin1');
+        text += extractTextFromContentStream(streamStr) + ' ';
+    }
+
+    return text.trim();
+}
+
+function extractTextFromContentStream(str) {
+    let out = '';
+
+    // BT...ET blocks
+    const btRegex = /BT([\s\S]*?)ET/g;
+    let btMatch;
+    while ((btMatch = btRegex.exec(str)) !== null) {
+        const block = btMatch[1];
+
+        // (string) Tj  or  (string) TJ
+        const tjRegex = /\(([^)\\]*(?:\\.[^)\\]*)*)\)\s*Tj/g;
+        let m;
+        while ((m = tjRegex.exec(block)) !== null) {
+            out += decodePdfString(m[1]) + ' ';
+        }
+
+        // [(string) ...] TJ  — array form
+        const tjArrayRegex = /\[([\s\S]*?)\]\s*TJ/g;
+        while ((m = tjArrayRegex.exec(block)) !== null) {
+            const inner = m[1];
+            const strRegex = /\(([^)\\]*(?:\\.[^)\\]*)*)\)/g;
+            let sm;
+            while ((sm = strRegex.exec(inner)) !== null) {
+                out += decodePdfString(sm[1]);
+            }
+            out += ' ';
+        }
+
+        // Td / TD / T* operators imply newlines
+        if (/\bTd\b|\bTD\b|\bT\*\b/.test(block)) out += '\n';
+    }
+
+    return out;
+}
+
+function decodePdfString(s) {
+    return s
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, ' ')
+        .replace(/\\t/g, ' ')
+        .replace(/\\\(/g, '(')
+        .replace(/\\\)/g, ')')
+        .replace(/\\\\/g, '\\');
+}
+
+// ── Main handler ────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
@@ -64,16 +167,18 @@ export default async function handler(req, res) {
                 topic = filePart.data.toString('utf-8');
 
             } else if (filename.endsWith('.docx')) {
-                const mammoth = await import('mammoth');
-                const result = await mammoth.default.extractRawText({ buffer: filePart.data });
+                // Dynamic import works fine — the real issue was ESM/CJS interop.
+                // Use createRequire for reliability on Vercel.
+                const require = createRequire(import.meta.url);
+                const mammoth = require('mammoth');
+                const result = await mammoth.extractRawText({ buffer: filePart.data });
                 topic = result.value;
 
             } else if (filename.endsWith('.pdf')) {
-                // Extract text from PDF by parsing raw content streams
-                topic = extractPdfTextRaw(filePart.data);
-                if (!topic || topic.length < 10) {
-                    return res.status(400).json({ 
-                        error: 'Could not extract text from this PDF. Try copying the text and pasting it directly instead.' 
+                topic = await extractPdfText(filePart.data);
+                if (!topic || topic.trim().length < 10) {
+                    return res.status(400).json({
+                        error: 'Could not extract text from this PDF. Try copying the text and pasting it directly instead.'
                     });
                 }
 
@@ -85,7 +190,9 @@ export default async function handler(req, res) {
         }
 
     } else {
-        const body = req.body;
+        // JSON body — parse it manually since bodyParser is disabled
+        const rawBody = await getRawBody(req);
+        const body = JSON.parse(rawBody.toString('utf-8'));
         topic = body.topic;
         cardCount = body.cardCount || 8;
     }
@@ -141,34 +248,4 @@ Format:
     } catch (error) {
         res.status(500).json({ error: 'AI generation failed.', details: error.message });
     }
-}
-
-// Pure JS PDF text extractor - no external packages needed
-function extractPdfTextRaw(buffer) {
-    const str = buffer.toString('latin1');
-    let text = '';
-    const streamRegex = /stream([\s\S]*?)endstream/g;
-    let match;
-    while ((match = streamRegex.exec(str)) !== null) {
-        const streamContent = match[1];
-        // Extract text from BT...ET blocks (PDF text objects)
-        const btRegex = /BT([\s\S]*?)ET/g;
-        let btMatch;
-        while ((btMatch = btRegex.exec(streamContent)) !== null) {
-            const block = btMatch[1];
-            // Extract strings in parentheses (Tj, TJ operators)
-            const strRegex = /\(([^)]*)\)\s*Tj|\(([^)]*)\)/g;
-            let strMatch;
-            while ((strMatch = strRegex.exec(block)) !== null) {
-                const extracted = (strMatch[1] || strMatch[2] || '')
-                    .replace(/\\n/g, '\n')
-                    .replace(/\\r/g, ' ')
-                    .replace(/\\t/g, ' ')
-                    .replace(/\\\(/g, '(')
-                    .replace(/\\\)/g, ')');
-                text += extracted + ' ';
-            }
-        }
-    }
-    return text.trim();
 }
