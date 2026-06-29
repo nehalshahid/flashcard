@@ -466,15 +466,18 @@ select:focus { outline: none; border-color: var(--amber-dim); }
 .card-face {
     position: absolute;
     inset: 0;
-    -webkit-backface-visibility: hidden; /* CRITICAL: Fixes Mobile Safari / iOS Chrome bleed-through */
+    -webkit-backface-visibility: hidden; /* Fixes Mobile Safari / iOS Chrome bleed-through */
     backface-visibility: hidden;         /* Fixes Desktop Engines */
     border-radius: 6px;
-    padding: 28px 32px 56px;
+    padding: 28px 32px 32px;             /* Clean, balanced padding */
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    overflow-y: auto;                    /* CRITICAL: Allows longer answers to cleanly scroll on narrow displays */
+    justify-content: flex-start;         /* CRITICAL: Fixes the mobile top-clipping overflow bug */
+    overflow-y: auto;                    /* Allows longer answers to cleanly scroll */
     border: 1px solid var(--border);
+    
+    /* Smooth scrolling feel on iOS devices */
+    -webkit-overflow-scrolling: touch; 
 }
 
 /* BULLETPROOF MOBILE TOGGLE: Forces opposite side text layers to completely turn off rendering when flipped */
@@ -529,6 +532,7 @@ select:focus { outline: none; border-color: var(--amber-dim); }
     color: var(--text);
     position: relative;
     z-index: 1;
+    margin: auto 0;                      /* Auto-centers text vertically without clipping */
 }
 
 .card-text-answer {
