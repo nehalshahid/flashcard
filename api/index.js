@@ -216,7 +216,7 @@ Format:
                 messages: [
                     {
                         role: 'system',
-                        content: 'You are a flashcard generator. You only respond with valid JSON arrays. Keep each answer to 1-2 sentences. Never add any text before or after the JSON.'
+                        content: 'You are a flashcard generator. You only respond with valid JSON arrays. Write detailed, thorough answers of 3-5 sentences each — explain the concept fully, include why it matters, and give an example where helpful. Never add any text before or after the JSON.'
                     },
                     { role: 'user', content: prompt }
                 ],
